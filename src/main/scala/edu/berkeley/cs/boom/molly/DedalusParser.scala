@@ -13,13 +13,14 @@ trait DedalusParser extends PositionedParserUtilities {
   lazy val followsfrom = ":-"
   lazy val timesuffix: Parser[Time] =
     "@next" ^^ { _  => Next() } |
-      "@async" ^^ { _ => Async() } |
-      "@NRESERVED" ^^ { _ => NReservered() } |
-      '@' ~> number ^^ Tick
+    "@async" ^^ { _ => Async() } |
+    "@NRESERVED" ^^ { _ => NReservered() } |
+    '@' ~> number ^^ Tick
   lazy val op = "==" | "!=" | "+" | "-" | "/" | "*" | "<" | ">" | "<=" | ">="
 
   lazy val constant: Parser[Constant] = string ^^ StringLiteral | number ^^ IntLiteral | ident ^^ Identifier
-  lazy val expression: Parser[Expression] = (constant ~ op ~ expression ^^ { case c ~ o ~ e => Expr(c, o, e)}) | constant
+  lazy val expr: Parser[Expr] = constant ~ op ~ exprOrConstant ^^ { case c ~ o ~ e => Expr(c, o, e)}
+  lazy val exprOrConstant: Parser[Expression] = expr | constant
   lazy val aggregate = ident ~ "<" ~ ident ~ ">" ^^ {
     case aggName ~ "<" ~ aggCol ~ ">" => Aggregate(aggName, aggCol)
   }
@@ -37,15 +38,15 @@ trait DedalusParser extends PositionedParserUtilities {
   }
 
   lazy val head = predicate
-  lazy val body = repsep(term, ",")
-  lazy val term: Parser[Either[Predicate, Expression]] =
-    predicate ^^ { Left(_) } | expression ^^ { Right(_) }
+  lazy val body = repsep(bodyTerm, ",")
+  lazy val bodyTerm: Parser[Either[Predicate, Expr]] =
+    predicate ^^ { Left(_) } | expr ^^ { Right(_) }
 
   lazy val predicate = opt("notin") ~ ident ~ "(" ~ repsep(atom, ",") ~ ")" ~ opt(timesuffix) ^^ {
     case notin ~ tableName ~ "(" ~ cols ~ ")" ~ time =>
       Predicate(tableName, cols, notin.isDefined, time)
   }
-  lazy val atom = aggregate | expression | constant
+  lazy val atom = aggregate | exprOrConstant | constant
 
   override val whiteSpace = """(\s|(//.*\n))+""".r
 }

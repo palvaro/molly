@@ -26,7 +26,7 @@ object DedalusRewrites {
       case Tick(t) => pred.copy(cols = pred.cols ++ List(IntLiteral(t)))
     }
 
-    def rewriteBodyElem(time: Time)(elem: Either[Predicate, Expression]): Either[Predicate, Expression] =
+    def rewriteBodyElem(time: Time)(elem: Either[Predicate, Expr]): Either[Predicate, Expr] =
       elem match {
         case r @ Right(expr) => r
         case Left(pred) =>

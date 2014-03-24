@@ -10,7 +10,19 @@ sealed trait Atom extends Node
 sealed trait Expression extends Atom
 sealed trait Constant extends Expression
 
-case class Expr(left: Constant, op: String, right: Expression) extends Expression
+case class Expr(left: Constant, op: String, right: Expression) extends Expression {
+  def variables: Set[Identifier] = {
+    val rightVariables = right match {
+      case i: Identifier => Set(i)
+      case e: Expr => e.variables
+      case _ => Set.empty
+    }
+    left match {
+      case i: Identifier => Set(i) ++ rightVariables
+      case _ => Set.empty
+    }
+  }
+}
 
 case class StringLiteral(str: String) extends Constant
 case class IntLiteral(int: Int) extends Constant
@@ -28,9 +40,9 @@ case class Table(name: String, types: List[String])
 
 sealed trait Clause extends Node
 case class Include(file: String) extends Clause
-case class Rule(head: Predicate, body: List[Either[Predicate, Expression]]) extends Clause {
+case class Rule(head: Predicate, body: List[Either[Predicate, Expr]]) extends Clause {
   def bodyPredicates: List[Predicate] = body.filter(_.isLeft).map(_.left.get)
-  def expressions: List[Expression] = body.filter(_.isRight).map(_.right.get)
+  def bodyExpressions: List[Expr] = body.filter(_.isRight).map(_.right.get)
   def variablesWithIndexes: List[(String, (String, Int))] = {
     (List(head) ++ bodyPredicates).flatMap(_.variablesWithIndexes)
   }

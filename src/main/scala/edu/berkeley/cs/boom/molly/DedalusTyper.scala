@@ -59,6 +59,19 @@ object DedalusTyper {
       immutable.Map(m: _*)    // Workaround for a Scala bug :(
     }
 
+    // Any variable that appears in an expression in the rule body must be an int:
+    for (rule <- program.rules) {
+      val expressionVariables = rule.bodyExpressions.flatMap(_.variables)
+      rule.head.cols.zipWithIndex.foreach { case (atom, colNum) =>
+        atom match {
+          case ident: Identifier =>
+            if (expressionVariables.contains(ident))
+              knownTypes(rule.head.tableName)(colNum) = INT
+          case _ =>
+         }
+      }
+    }
+
     var updatedBindings = true
     // Iteratively fill in the missing types by find columns that should have the same type:
     while (updatedBindings) {
