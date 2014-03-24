@@ -37,6 +37,7 @@ object C4CodeGenerator extends PrettyPrinter {
   }
   
   private def genPredicate(predicate: Predicate): Doc = {
-    predicate.tableName <> parens(ssep(predicate.cols.map(genAtom), ", "))
+    val notin = if (predicate.notin) "notin" <> space else empty
+    notin <> predicate.tableName <> parens(ssep(predicate.cols.map(genAtom), ", "))
   }
 }
