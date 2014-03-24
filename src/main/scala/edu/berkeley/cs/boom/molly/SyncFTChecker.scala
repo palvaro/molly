@@ -4,6 +4,7 @@ import java.io.File
 import scala.io.Source
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.ast.Program
+import edu.berkeley.cs.boom.molly.report.HTMLWriter
 
 
 case class Config(
@@ -46,9 +47,11 @@ object SyncFTChecker extends Logging {
       val parseResultsWithIncludes = processIncludes(parseResults, includeSearchPath)
       val program = DedalusRewrites.referenceClockRules(
         DedalusRewrites.addProvenanceRules(parseResultsWithIncludes))
-      val failureSpec = new FailureSpec(config.eot, config.eff, config.crashes, config.nodes)
+      val failureSpec = new FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
       val verifier = new Verifier(failureSpec, program)
       logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
+      // TODO: name the output directory after the input filename and failure spec.
+      HTMLWriter.write(new File("output"), Nil, verifier.verify)
     } getOrElse {
       // Error messages
     }

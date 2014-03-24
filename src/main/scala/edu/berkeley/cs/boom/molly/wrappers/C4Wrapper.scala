@@ -26,8 +26,8 @@ class C4Wrapper(name: String, program: Program) extends Logging {
     }
   }
 
-  def parseTableDump(string: String): Array[Array[String]] = {
-    string.lines.map(_.split(",")).toArray
+  def parseTableDump(string: String): List[List[String]] = {
+    string.lines.map(_.split(",").toList).toList
   }
 }
 

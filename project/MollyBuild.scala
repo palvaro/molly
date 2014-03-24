@@ -32,7 +32,8 @@ object MollyBuild extends Build {
         "com.googlecode.kiama" % "kiama_2.10" % "1.5.2",
         "com.github.scopt" %% "scopt" % "3.2.0",
         "org.apache.commons" % "commons-math3" % "3.2",
-        "com.github.jnr" % "jnr-ffi" % "1.0.10"
+        "com.github.jnr" % "jnr-ffi" % "1.0.10",
+        "io.argonaut" %% "argonaut" % "6.0.3"
       )
     )
   )

@@ -3,11 +3,11 @@ package edu.berkeley.cs.boom.molly
 import org.apache.commons.math3.util.ArithmeticUtils
 import edu.berkeley.cs.boom.molly.ast.{IntLiteral, StringLiteral, Predicate}
 
-class FailureSpec(
-  val eot: Int,
-  val eff: Int,
-  val crashes: Int,
-  val nodes: Seq[String]) {
+case class FailureSpec(
+  eot: Int,
+  eff: Int,
+  crashes: Int,
+  nodes: List[String]) {
 
   def grossEstimate: Long = {
     import ArithmeticUtils._
