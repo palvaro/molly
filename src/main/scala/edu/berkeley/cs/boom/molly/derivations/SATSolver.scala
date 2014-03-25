@@ -7,6 +7,8 @@ import scala.collection.mutable
 import org.sat4j.specs.IVecInt
 import org.sat4j.core.VecInt
 import com.typesafe.scalalogging.slf4j.Logging
+import org.sat4j.tools.ModelIterator
+import scala.collection.mutable.ArrayBuffer
 
 object SATSolver extends Logging {
   private val nextVar = new AtomicInteger(1)
@@ -30,9 +32,10 @@ object SATSolver extends Logging {
    * @param goals a list of goals whose derivations we'll attempt to falsify
    * @param seed a set of message failures that we already know have occurred,
    *             e.g. from previous runs.
+   * @return all solutions to the SAT problem
    */
   def solve(failureSpec: FailureSpec, goals: List[GoalNode], seed: Set[MessageLoss] = Set.empty):
-    Set[SATVariable] = {
+    Set[Set[SATVariable]] = {
     val solver = SolverFactory.newLight()
 
     // Basic variable creation and constraints
@@ -72,14 +75,15 @@ object SATSolver extends Logging {
     // Assume any message losses that have already occurred:
     val assumptions = seed
 
-    if (solver.isSatisfiable(assumptions)) {
-      val model = solver.model()
-      val trueVars = model.filter(_ > 0).map(idToSatVariable).toSet
-      logger.info("SAT problem has model: " + trueVars)
-      trueVars
-    } else {
-      logger.info("SAT problem is unsatisfiable")
-      Set.empty
+    val modelIterator = new ModelIterator(solver)
+    val models = ArrayBuffer[Set[SATVariable]]()
+    while (modelIterator.isSatisfiable(assumptions)) {
+      models += modelIterator.model().filter(_ > 0).map(idToSatVariable).toSet
     }
+    logger.info(s"SAT problem has ${models.size} solutions:\n${models.map(_.toString()).mkString("\n")}")
+    def isSubset[T](set: Set[T], superset: Set[T]): Boolean = set.forall(e => superset.contains(e))
+    val minimalModels = models.filterNot { m => models.exists(m2 => m != m2 && isSubset(m2, m) )}
+    logger.info(s"Minimal models are: \n${minimalModels.map(_.toString()).mkString("\n")}")
+    minimalModels.toSet
   }
 }
