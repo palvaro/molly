@@ -17,8 +17,8 @@ object DedalusRewrites {
   def referenceClockRules(program: Program): Program = {
     def nextClock(loc: Atom) =
       Predicate("clock", List(loc, dc, nreserved, dc), notin = false, None)
-    def asyncClock(loc: Atom) =
-      Predicate("clock", List(loc, dc, nreserved, mreserved), notin = false, None)
+    def asyncClock(from: Atom, to: Atom) =
+      Predicate("clock", List(from, to, nreserved, mreserved), notin = false, None)
 
     def rewriteHead(pred: Predicate, time: Time): Predicate = time match {
       case Next() => pred.copy(cols = pred.cols ++ List(Expr(nreserved, "+", IntLiteral(1))))
@@ -41,7 +41,9 @@ object DedalusRewrites {
               case Next() =>
                 Rule(rewriteHead(head, Next()), body.map(rewriteBodyElem) ++ List(Left(nextClock(head.cols(0)))))
               case Async() =>
-                Rule(rewriteHead(head, Async()), body.map(rewriteBodyElem) ++ List(Left(asyncClock(head.cols(0)))))
+                val from = rule.bodyPredicates(0).cols(0)
+                val to = head.cols(0)
+                Rule(rewriteHead(head, Async()), body.map(rewriteBodyElem) ++ List(Left(asyncClock(from, to))))
               //case Tick(number) =>
             }
         }
