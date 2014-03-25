@@ -10,6 +10,8 @@ import scala.Some
 import edu.berkeley.cs.boom.molly.ast.Program
 import edu.berkeley.cs.boom.molly.report.GraphvizPrettyPrinter
 import java.util.concurrent.atomic.AtomicInteger
+import scalaz._
+import Scalaz._
 
 
 object RuleGoalGraphGraphvizGenerator extends GraphvizPrettyPrinter {
@@ -61,6 +63,14 @@ case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) {
       childrenClocks
     }
   }
+
+  def enumerateDistinctDerivations: Set[GoalNode] = {
+    if (rules.isEmpty) {
+      Set(this)
+    } else {
+      rules.flatMap(_.enumerateDistinctDerivationsOfSubGoals).map(r => this.copy(rules = Set(r)))
+    }
+  }
 }
 
 /**
@@ -69,7 +79,12 @@ case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) {
  * @param rule the rule that was applied.
  * @param subgoals the facts that were used in this rule application.
  */
-case class RuleNode(id: Int, rule: Rule, subgoals: Set[GoalNode])
+case class RuleNode(id: Int, rule: Rule, subgoals: Set[GoalNode]) {
+  def enumerateDistinctDerivationsOfSubGoals: List[RuleNode] = {
+    val choices: List[List[GoalNode]] = subgoals.map(_.enumerateDistinctDerivations.toList).toList
+    choices.sequence.map(subgoalDerivations => this.copy(subgoals = subgoalDerivations.toSet))
+  }
+}
 
 /**
  * Construct rule-goal graphs from provenance captured during execution.

@@ -8,6 +8,7 @@ case class FailureSpec(
   eff: Int,
   crashes: Int,
   nodes: List[String]) {
+  require(crashes <= nodes.size, "Can't have more crashes than nodes")
 
   def grossEstimate: Long = {
     import ArithmeticUtils._

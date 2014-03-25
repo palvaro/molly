@@ -33,7 +33,8 @@ object MollyBuild extends Build {
         "com.github.scopt" %% "scopt" % "3.2.0",
         "org.apache.commons" % "commons-math3" % "3.2",
         "com.github.jnr" % "jnr-ffi" % "1.0.10",
-        "io.argonaut" %% "argonaut" % "6.0.3"
+        "io.argonaut" %% "argonaut" % "6.0.3",
+        "org.ow2.sat4j" % "org.ow2.sat4j.core" % "2.3.5"
       )
     )
   )
