@@ -14,7 +14,7 @@ case class FailureSpec(
     import ArithmeticUtils._
     val channels = (nodes.size * nodes.size) - nodes.size
     val lossScenarios = (0 to eff).map(i => binomialCoefficient(eff, i)).sum
-    pow(channels, lossScenarios)
+    pow(lossScenarios, channels)
   }
 
   def generateClockFacts: Seq[Predicate] = {
