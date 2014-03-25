@@ -46,7 +46,7 @@ object SyncFTChecker extends Logging {
       val parseResults = DedalusParser.parseProgram(combinedInput)
       val includeSearchPath = config.inputPrograms(0).getParentFile
       val parseResultsWithIncludes = processIncludes(parseResults, includeSearchPath)
-      val rewrite = referenceClockRules _ andThen addProvenanceRules
+      val rewrite = c4StratificationWorkaround _ andThen referenceClockRules andThen addProvenanceRules
       val program = rewrite(parseResultsWithIncludes)
       val failureSpec = new FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
       val verifier = new Verifier(failureSpec, program)
