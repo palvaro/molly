@@ -137,7 +137,7 @@ object ProvenanceReader extends Logging {
       logger.debug(s"New subgoal tuples are $newGoalTuples")
       // Recursively compute the provenance of those goals:
       RuleNode(nextRuleNodeId.getAndIncrement,
-        provRule, newGoalTuples.map(buildRGG(program, model)).toSet)  // TODO: use rule instead of provRule?
+        provRule, newGoalTuples.map(buildRGG(program, model)).toSet)
     }
     GoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes)
   }

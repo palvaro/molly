@@ -54,52 +54,10 @@ object DedalusRewrites {
   }
 
   /**
-   * Workaround for lack of stratification support in C4.
-   *
-   * When running non-monotonic programs, C4 rules may produce retractions of earlier
-   * derivations.  Consumers of these retractions need a mechanism to determine
-   * whether the retracted fact had any alternate derivations via another rule.
-   * This could be accomplished by storing full lineage alongside each tuple.
-   *
-   * Instead of tracking per-tuple lineage, we can rewrite our program to assign
-   * unique names to each rule.  For example, the program
-   *
-   *    good <- rel_p, rel_q
-   *    good <- rel_r, rel_s
-   *
-   * would be rewritten as
-   *
-   *    good <- rule_a
-   *    good <- rule_b
-   *    rule_a <- rel_p, rel_q
-   *    rule_b <- rel_r, rel_s
-   *
-   * Now, the reference count of a tuple in `good` reflects the number of rules that
-   * derived it and we won't risk over-deletion.  This workaround is specific to C4's
-   * reference-counting mechanisms.
-   *
-   * TODO: make a more formal argument for correctness by formally stating what C4's
-   * reference counts are actually counting and showing how the rewrite changes the
-   * semantics of those counts.
-   *
-   * TODO: Since we have to generate provenance rules anyways, maybe we can rewrite
-   * the program to replace rule bodies with projections from the provenance rule
-   * tables.
-   */
-  def c4StratificationWorkaround(program: Program): Program = {
-    val newRules = program.rules.zipWithIndex.flatMap { case (rule, ruleNum) =>
-      val newRuleName = rule.head.tableName + "_rule" + ruleNum
-      val renamedRule = rule.copy(head = rule.head.copy(tableName = newRuleName))
-      val newRule = Rule(rule.head.copy(time = None), List(Left(renamedRule.head)))
-      List(renamedRule, newRule)
-    }
-    program.copy(rules = newRules)
-  }
-
-  /**
-   * Add additional rules to record provenance.
+   * Add rules and rewrite rule bodies to record provenance.
    */
   def addProvenanceRules(program: Program): Program = {
+    // Generate provenance rules
     val provenanceRules = program.rules.zipWithIndex.map { case (rule, number) =>
       // Rename the rule head and modify it to record all variable bindings.
       // We also record the values of variables that appear in expressions in order to
@@ -116,7 +74,16 @@ object DedalusRewrites {
           newVariables.map(Identifier).filter(_ != dc) ++ List(rule.head.cols.last))
       rule.copy(head = newHead)
     }
-    program.copy(rules = program.rules ++ provenanceRules)
+    // Rewrite the program's rule bodies to reference the provenance rules
+    val rewrittenRules = program.rules.zip(provenanceRules).map { case (rule, provRule) =>
+      // Rewrite the time columns so they don't contain expressions:
+      val head = rule.head.copy(time = None, cols = rule.head.cols.take(rule.head.cols.size - 1) ++ List(nreserved))
+      // Ignore recording of extra variable bindings in the provenance rule:
+      val placeholders = (1 to (provRule.head.cols.size - rule.head.cols.size)).map { _ => dc }
+      val body = provRule.head.copy(cols = provRule.head.cols.take(rule.head.cols.size - 1) ++ placeholders ++ List(nreserved))
+      Rule(head, List(Left(body)))
+    }
+    program.copy(rules = rewrittenRules ++ provenanceRules)
   }
 
 }
