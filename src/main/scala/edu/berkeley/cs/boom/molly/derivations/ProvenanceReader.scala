@@ -44,12 +44,24 @@ case class GoalTuple(table: String, cols: List[String]) {
  * Represents a goal (fact to be proved).  Appears at the root
  * of the rule-goal graph.
  *
- * @param fact the fact being proved.
+ * @param tuple the fact being proved.
  * @param rules a list of rules that derived this fact.  If this contains
- *              more tha one rule, then there are multiple derivations of
+ *              more than one rule, then there are multiple derivations of
  *              this fact.
  */
-case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode])
+case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) {
+  def importantClocks: Set[(String, String, Int)] = {
+    val childrenClocks = rules.flatMap(_.subgoals).flatMap(_.importantClocks)
+    if (tuple.table == "clock" && tuple.cols(1) != ProvenanceReader.WILDCARD) {
+      val from = tuple.cols(0)
+      val to = tuple.cols(1)
+      val time = tuple.cols(3).toInt
+      childrenClocks ++ Set((from, to, time))
+    } else {
+      childrenClocks
+    }
+  }
+}
 
 /**
  * Represents a concrete application of a rule.
@@ -99,7 +111,7 @@ object ProvenanceReader extends Logging {
       val provRule = program.rules.find(_.head.tableName == provRuleName).get
       val bindings = provRowToVariableBindings(provRule, provTableRow)
       // Substitute the variable bindings to determine the set of goals used by this rule.
-      val newGoalTuples = provRule.bodyPredicates.filter(_.tableName != "clock").filterNot(_.notin).map { pred =>
+      val newGoalTuples = provRule.bodyPredicates.filterNot(_.notin).map { pred =>
         val cols = pred.cols.map {
           case StringLiteral(s) => s
           case IntLiteral(i) => i.toString
@@ -116,7 +128,7 @@ object ProvenanceReader extends Logging {
   }
 
 
-  private val WILDCARD = "__WILDCARD__"
+  val WILDCARD = "__WILDCARD__"
 
   /**
    * Check tuples for compatibility while accounting for wildcards.
