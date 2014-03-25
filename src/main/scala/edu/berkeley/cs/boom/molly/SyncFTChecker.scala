@@ -4,6 +4,7 @@ import java.io.File
 import scala.io.Source
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.ast.Program
+import edu.berkeley.cs.boom.molly.DedalusRewrites._
 import edu.berkeley.cs.boom.molly.report.HTMLWriter
 
 
@@ -45,8 +46,8 @@ object SyncFTChecker extends Logging {
       val parseResults = DedalusParser.parseProgram(combinedInput)
       val includeSearchPath = config.inputPrograms(0).getParentFile
       val parseResultsWithIncludes = processIncludes(parseResults, includeSearchPath)
-      val program = DedalusRewrites.referenceClockRules(
-        DedalusRewrites.addProvenanceRules(parseResultsWithIncludes))
+      val rewrite = referenceClockRules _ andThen addProvenanceRules
+      val program = rewrite(parseResultsWithIncludes)
       val failureSpec = new FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
       val verifier = new Verifier(failureSpec, program)
       logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")

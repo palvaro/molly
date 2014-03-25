@@ -61,7 +61,7 @@ object DedalusTyper {
 
     // Any variable that appears in an expression in the rule body must be an int:
     for (rule <- program.rules) {
-      val expressionVariables = rule.bodyExpressions.flatMap(_.variables)
+      val expressionVariables = rule.bodyQuals.flatMap(_.variables)
       rule.head.cols.zipWithIndex.foreach { case (atom, colNum) =>
         atom match {
           case ident: Identifier =>

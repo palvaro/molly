@@ -26,26 +26,22 @@ object DedalusRewrites {
       case Tick(t) => pred.copy(cols = pred.cols ++ List(IntLiteral(t)))
     }
 
-    def rewriteBodyElem(time: Time)(elem: Either[Predicate, Expr]): Either[Predicate, Expr] =
+    def rewriteBodyElem(elem: Either[Predicate, Expr]): Either[Predicate, Expr] =
       elem match {
         case r @ Right(expr) => r
-        case Left(pred) =>
-          time match {
-            case Next() => Left(pred.copy(cols = pred.cols ++ List(mreserved)))
-            case Async() => Left(pred.copy(cols = pred.cols ++ List(nreserved)))
-          }
+        case Left(pred) => Left(pred.copy(cols = pred.cols ++ List(nreserved)))
       }
 
     def rewriteRule(rule: Rule): Rule = rule match {
       case Rule(head, body) =>
         head.time match {
-          case None => Rule(head.copy(cols = head.cols ++ List(nreserved)), body.map(rewriteBodyElem(Async())))
+          case None => Rule(head.copy(cols = head.cols ++ List(nreserved)), body.map(rewriteBodyElem))
           case Some(time) =>
             time match {
               case Next() =>
-                Rule(rewriteHead(head, Next()), body.map(rewriteBodyElem(Next())) ++ List(Left(nextClock(head.cols(0)))))
+                Rule(rewriteHead(head, Next()), body.map(rewriteBodyElem) ++ List(Left(nextClock(head.cols(0)))))
               case Async() =>
-                Rule(rewriteHead(head, Async()), body.map(rewriteBodyElem(Async())) ++ List(Left(asyncClock(head.cols(0)))))
+                Rule(rewriteHead(head, Async()), body.map(rewriteBodyElem) ++ List(Left(asyncClock(head.cols(0)))))
               //case Tick(number) =>
             }
         }
@@ -61,10 +57,18 @@ object DedalusRewrites {
   def addProvenanceRules(program: Program): Program = {
     val provenanceRules = program.rules.zipWithIndex.map { case (rule, number) =>
       // Rename the rule head and modify it to record all variable bindings.
-      val allVariables = rule.variablesWithIndexes.map(_._1).toSet
+      // We also record the values of variables that appear in expressions in order to
+      // avoid the need to invert those expressions to recover the variable bindings
+      // inside the ProvenanceReader.
+      val headExprVars = rule.head.cols.filter(_.isInstanceOf[Expr]).map(_.asInstanceOf[Expr])
+        .flatMap(_.variables).map(_.name)
+      val allVariables = rule.variablesWithIndexes.map(_._1).toSet ++
+        rule.bodyQuals.flatMap(_.variables).map(_.name) ++ headExprVars
       val newVariables = allVariables -- rule.head.variablesWithIndexes.map(_._1).toSet
+      // Produce a new head, preserving the last time column:
       val newHead = rule.head.copy(tableName = rule.head.tableName + "_prov" + number,
-        cols = rule.head.cols ++ newVariables.map(Identifier).filter(_ != dc))
+        cols = rule.head.cols.take(rule.head.cols.size - 1) ++
+          newVariables.map(Identifier).filter(_ != dc) ++ List(rule.head.cols.last))
       rule.copy(head = newHead)
     }
     program.copy(rules = program.rules ++ provenanceRules)
