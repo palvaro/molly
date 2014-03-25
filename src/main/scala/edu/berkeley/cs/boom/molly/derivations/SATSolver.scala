@@ -32,10 +32,10 @@ object SATSolver extends Logging {
    * @param goals a list of goals whose derivations we'll attempt to falsify
    * @param seed a set of message failures that we already know have occurred,
    *             e.g. from previous runs.
-   * @return all solutions to the SAT problem
+   * @return all solutions to the SAT problem, as sets of crashes and message omissions
    */
   def solve(failureSpec: FailureSpec, goals: List[GoalNode], seed: Set[MessageLoss] = Set.empty):
-    Set[Set[SATVariable]] = {
+    Set[(Set[CrashFailure], Set[MessageLoss])] = {
     val solver = SolverFactory.newLight()
 
     // Basic variable creation and constraints
@@ -50,7 +50,7 @@ object SATSolver extends Logging {
       solver.addExactly(crashVars ++ Seq(neverCrashed), 1)
     }
     // If there are at most C crashes, then at least (N - C) nodes never crash:
-    solver.addExactly(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.crashes)
+    solver.addExactly(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.maxCrashes)
 
     // Message losses:
     for (
@@ -84,6 +84,14 @@ object SATSolver extends Logging {
     def isSubset[T](set: Set[T], superset: Set[T]): Boolean = set.forall(e => superset.contains(e))
     val minimalModels = models.filterNot { m => models.exists(m2 => m != m2 && isSubset(m2, m) )}
     logger.info(s"Minimal models are: \n${minimalModels.map(_.toString()).mkString("\n")}")
-    minimalModels.toSet
+    minimalModels.flatMap { vars =>
+      val crashes = vars.filter(_.isInstanceOf[CrashFailure]).map(_.asInstanceOf[CrashFailure])
+      val losses = vars.filter(_.isInstanceOf[MessageLoss]).map(_.asInstanceOf[MessageLoss])
+      if (crashes.isEmpty && losses.isEmpty) {
+        None
+      } else {
+        Some((crashes, losses))
+      }
+    }.toSet
   }
 }

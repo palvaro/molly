@@ -10,12 +10,12 @@ object HTMLWriter {
   def write(
     outputDirectory: File,
     originalPrograms: List[File],
-    runs: List[Run]
+    runs: Traversable[Run]
   ) = {
     outputDirectory.mkdirs()
     require (outputDirectory.isDirectory)
     val fw = new FileWriter(new File(outputDirectory, "runs.json"))
-    fw.write(runs.asJson.pretty(spaces2))
+    fw.write(runs.toList.asJson.pretty(spaces2))
     fw.close()
   }
 }

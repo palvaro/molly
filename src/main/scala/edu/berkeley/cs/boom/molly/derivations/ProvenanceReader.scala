@@ -4,7 +4,7 @@ import edu.berkeley.cs.boom.molly.ast._
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.ast.StringLiteral
 import edu.berkeley.cs.boom.molly.ast.Rule
-import edu.berkeley.cs.boom.molly.UltimateModel
+import edu.berkeley.cs.boom.molly.{FailureSpec, UltimateModel}
 import edu.berkeley.cs.boom.molly.ast.Identifier
 import scala.Some
 import edu.berkeley.cs.boom.molly.ast.Program
@@ -57,7 +57,7 @@ case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) {
     if (tuple.table == "clock" && tuple.cols(1) != ProvenanceReader.WILDCARD) {
       val from = tuple.cols(0)
       val to = tuple.cols(1)
-      val time = tuple.cols(3).toInt
+      val time = tuple.cols(2).toInt
       childrenClocks ++ Set((from, to, time))
     } else {
       childrenClocks
@@ -80,6 +80,7 @@ case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) {
  * @param subgoals the facts that were used in this rule application.
  */
 case class RuleNode(id: Int, rule: Rule, subgoals: Set[GoalNode]) {
+  require (!subgoals.isEmpty, "RuleNode must have subgoals")
   def enumerateDistinctDerivationsOfSubGoals: List[RuleNode] = {
     val choices: List[List[GoalNode]] = subgoals.map(_.enumerateDistinctDerivations.toList).toList
     choices.sequence.map(subgoalDerivations => this.copy(subgoals = subgoalDerivations.toSet))
@@ -94,8 +95,9 @@ object ProvenanceReader extends Logging {
   private val nextRuleNodeId = new AtomicInteger(0)
   private val nextGoalNodeId = new AtomicInteger(0)
 
-  def read(program: Program, model: UltimateModel, goal: String): List[GoalNode] = {
-    def goalFacts = model.tables(goal).map(GoalTuple(goal, _))
+  def read(program: Program, failureSpec: FailureSpec, model: UltimateModel,
+           goal: String): List[GoalNode] = {
+    def goalFacts = model.tableAtTime(goal, failureSpec.eot).map(GoalTuple(goal, _))
     goalFacts.map(buildRGG(program, model))
   }
 
