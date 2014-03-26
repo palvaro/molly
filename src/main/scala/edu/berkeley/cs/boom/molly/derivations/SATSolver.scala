@@ -56,7 +56,14 @@ object SATSolver extends Logging {
     val solver = SolverFactory.newLight()
 
     // Crash failures:
-    for (node <- failureSpec.nodes) {
+    // Only nodes that sent messages will be candidates for crashing:
+    val importantNodes =
+      goal.enumerateDistinctDerivations.flatMap(_.importantClocks).map(_._1).toSet
+    logger.debug(s"Important nodes are $importantNodes")
+    for (
+      node <- failureSpec.nodes
+      if importantNodes.contains(node)
+    ) {
       // Create one variable for every time at which the node could crash:
       val crashVars = (0 to failureSpec.eff).map(t => CrashFailure(node, t))
       // An extra variable for scenarios where the node didn't crash:
