@@ -47,7 +47,8 @@ object DedalusRewrites {
                 val from = rule.bodyPredicates(0).cols(0)
                 val to = head.cols(0)
                 Rule(rewriteHead(head, Async()), body.map(rewriteBodyElem) ++ List(Left(asyncClock(from, to))))
-              //case Tick(number) =>
+              case Tick(number) =>
+                throw new IllegalStateException("Rule head can't only hold at a specific time step")
             }
         }
     }

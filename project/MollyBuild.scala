@@ -25,6 +25,7 @@ object MollyBuild extends Build {
     "molly",
     file("."),
     settings = buildSettings ++ Seq(
+      scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
       libraryDependencies ++= Seq(
         "com.typesafe" %% "scalalogging-slf4j" % "1.0.1",
         "org.slf4j" % "slf4j-log4j12" % "1.7.5",

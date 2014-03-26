@@ -109,6 +109,8 @@ object ProvenanceReader extends Logging {
       val list = fact.cols.map {
         case IntLiteral(i) => i.toString
         case StringLiteral(s) => s
+        case v => throw new IllegalStateException(
+          s"Facts shouldn't contain aggregates, expressions, or variables, but found $v")
       }
       if (matchesPattern(goalTuple.cols)(list)) {
         logger.debug(s"Found $goalTuple in EDB")
@@ -133,6 +135,10 @@ object ProvenanceReader extends Logging {
           case StringLiteral(s) => s
           case IntLiteral(i) => i.toString
           case Identifier(ident) => bindings(ident)
+          case agg: Aggregate =>
+            throw new NotImplementedError("Don't know how to substitute for aggregate")
+          case expr: Expr =>
+            throw new NotImplementedError("Didn't expect expression to appear in predicate")
         }
         GoalTuple(pred.tableName, cols)
       }

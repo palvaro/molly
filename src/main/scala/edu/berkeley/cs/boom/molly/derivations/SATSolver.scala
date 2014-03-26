@@ -8,6 +8,7 @@ import org.sat4j.core.VecInt
 import com.typesafe.scalalogging.slf4j.Logging
 import org.sat4j.tools.ModelIterator
 import scala.collection.mutable.ArrayBuffer
+import scala.language.implicitConversions
 
 object SATSolver extends Logging {
   sealed trait SATVariable

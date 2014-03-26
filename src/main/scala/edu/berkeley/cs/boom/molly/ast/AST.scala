@@ -52,11 +52,11 @@ case class Predicate(tableName: String,
                      notin: Boolean,
                      time: Option[Time]) extends Clause {
   def variablesWithIndexes: List[(String, (String, Int))] = {
-    val nonDCVars =
-      cols.zipWithIndex.filter(_._1.isInstanceOf[Identifier]).filter(_._1 != Identifier("_"))
-    nonDCVars.map { case (col, index) =>
+    cols.zipWithIndex.flatMap { case (col, index) =>
       col match {
-        case Identifier(i) => (i, (tableName, index))
+        case Identifier("_") => None
+        case Identifier(i) => Some((i, (tableName, index)))
+        case _ => None
       }
     }
   }
@@ -65,5 +65,4 @@ case class Predicate(tableName: String,
 sealed trait Time extends Node
 case class Next() extends Time
 case class Async() extends Time
-case class NReservered() extends Time
 case class Tick(number: Int) extends Time

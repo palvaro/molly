@@ -14,7 +14,6 @@ trait DedalusParser extends PositionedParserUtilities {
   lazy val timesuffix: Parser[Time] =
     "@next" ^^ { _  => Next() } |
     "@async" ^^ { _ => Async() } |
-    "@NRESERVED" ^^ { _ => NReservered() } |
     '@' ~> number ^^ Tick
   lazy val op = "==" | "!=" | "+" | "-" | "/" | "*" | "<" | ">" | "<=" | ">="
 
