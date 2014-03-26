@@ -1,7 +1,6 @@
 package edu.berkeley.cs.boom.molly.derivations
 
 import org.sat4j.minisat.SolverFactory
-import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.cs.boom.molly.FailureSpec
 import scala.collection.mutable
 import org.sat4j.specs.IVecInt
@@ -11,18 +10,7 @@ import org.sat4j.tools.ModelIterator
 import scala.collection.mutable.ArrayBuffer
 
 object SATSolver extends Logging {
-  private val nextVar = new AtomicInteger(1)
-  private val idToSatVariable = mutable.HashMap[Int, SATVariable]()
-  private val satVariableToId = mutable.HashMap[SATVariable, Int]()
-
-  private implicit def satVarToInt(satVar: SATVariable): Int = satVar.id
-  private implicit def satVarsToVecInt(clause: Iterable[SATVariable]): IVecInt =
-    new VecInt(clause.map(_.id).toArray)
-
-  sealed trait SATVariable extends Product {
-    val id = satVariableToId.getOrElseUpdate(this, nextVar.incrementAndGet())
-    idToSatVariable(id) = this
-  }
+  sealed trait SATVariable
   case class CrashFailure(node: String, time: Int) extends SATVariable
   case class NeverCrashed(node: String) extends SATVariable
   case class MessageLoss(from: String, to: String, time: Int) extends SATVariable
@@ -54,6 +42,17 @@ object SATSolver extends Logging {
 
   private def solve(failureSpec: FailureSpec, goal: GoalNode, seed: Set[SATVariable]) = {
     val solver = SolverFactory.newLight()
+
+    val idToSatVariable = mutable.HashMap[Int, SATVariable]()
+    val satVariableToId = mutable.HashMap[SATVariable, Int]()
+
+    implicit def satVarToInt(satVar: SATVariable): Int = {
+      val id = satVariableToId.getOrElseUpdate(satVar, solver.nextFreeVarId(true))
+      idToSatVariable(id) = satVar
+      id
+    }
+    implicit def satVarsToVecInt(clause: Iterable[SATVariable]): IVecInt =
+      new VecInt(clause.map(satVarToInt).toArray)
 
     // Crash failures:
     // Only nodes that sent messages will be candidates for crashing:
