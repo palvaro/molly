@@ -48,7 +48,8 @@ trait DedalusParser extends PositionedParserUtilities {
   }
   lazy val atom = aggregate | exprOrConstant | constant
 
-  override val whiteSpace = """(\s|(//.*\n))+""".r
+  // See https://stackoverflow.com/questions/5952720
+  override val whiteSpace = """(\s|//.*|(?m)/\*(\*(?!/)|[^*])*\*/)+""".r
 }
 
 object DedalusParser extends DedalusParser {
