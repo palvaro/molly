@@ -17,6 +17,8 @@ object DedalusRewrites {
   def referenceClockRules(program: Program): Program = {
     def nextClock(loc: Atom) =
       Predicate("clock", List(loc, dc, nreserved, dc), notin = false, None)
+    def localClock(loc: Atom) =
+      Predicate("clock", List(loc, loc, nreserved, dc), notin = false, None)
     def asyncClock(from: Atom, to: Atom) =
       Predicate("clock", List(from, to, nreserved, mreserved), notin = false, None)
 
@@ -38,7 +40,11 @@ object DedalusRewrites {
     def rewriteRule(rule: Rule): Rule = rule match {
       case Rule(head, body) =>
         head.time match {
-          case None => Rule(head.copy(cols = head.cols ++ List(nreserved)), body.map(rewriteBodyElem))
+          case None =>
+            // For local rules, we still need to reference the clock in order to guarantee that the
+            // clock variable appears in a non-negated body predicate.  We use localClock in order
+            // to reduce the number of possible derivations.
+            Rule(head.copy(cols = head.cols ++ List(nreserved)), body.map(rewriteBodyElem) ++ List(Left(localClock(head.cols(0)))))
           case Some(time) =>
             time match {
               case Next() =>
