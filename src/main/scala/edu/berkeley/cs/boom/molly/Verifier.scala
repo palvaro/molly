@@ -3,8 +3,9 @@ package edu.berkeley.cs.boom.molly
 import edu.berkeley.cs.boom.molly.ast.Program
 import edu.berkeley.cs.boom.molly.wrappers.C4Wrapper
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.cs.boom.molly.derivations.{SATSolver, RuleGoalGraphGraphvizGenerator, ProvenanceReader}
+import edu.berkeley.cs.boom.molly.derivations.{SATSolver, ProvenanceReader}
 import java.util.concurrent.atomic.AtomicInteger
+import edu.berkeley.cs.boom.molly.derivations.SATSolver.SATVariable
 
 case class RunStatus(underlying: String) extends AnyVal
 case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, model: UltimateModel)
@@ -33,14 +34,8 @@ class Verifier(failureSpec: FailureSpec, program: Program) extends Logging {
     if (satModels.isEmpty) {
       List(Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel))
     } else {
-      satModels.map { case (crashes, omissions) =>
-        failureSpec.copy (crashes = crashes, omissions = omissions)
-      }.flatMap(doVerify)
+      satModels.flatMap(doVerify)
     }
-  }
-
-  private def isVacuouslyGood(model: UltimateModel): Boolean = {
-    model.tableAtTime("good", failureSpec.eot).isEmpty
   }
 
   private def isGood(model: UltimateModel): Boolean = {
@@ -52,10 +47,18 @@ class Verifier(failureSpec: FailureSpec, program: Program) extends Logging {
     val failProgram = DedalusTyper.inferTypes(failureSpec.addClockFacts(program))
     val model = new C4Wrapper("with_errors", failProgram).run
     logger.info(s"'good' is ${model.tableAtTime("good", failureSpec.eot)}")
-    if (isVacuouslyGood(model)) {
-      List(Run(runId.getAndIncrement, RunStatus("vacuous"), failureSpec, model))
-    } else if (isGood(model)) {
-      List(Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model))
+    if (isGood(model)) {
+      // This run may have used more channels than the original run; verify
+      // that omissions on those new channels don't produce counterexamples:
+      val provenance = ProvenanceReader.read(failProgram, failureSpec, model, "good")
+      val seed: Set[SATVariable] = failureSpec.crashes ++ failureSpec.omissions
+      val satModels = SATSolver.solve(failureSpec, provenance, seed) -- Set(failureSpec)
+      val counterexamples = satModels.flatMap(doVerify).filter(r => r.status == RunStatus("failure"))
+      if (counterexamples.isEmpty) {
+        List(Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model))
+      } else {
+        counterexamples
+      }
     } else {
       logger.info("Found counterexample: " + failureSpec)
       List(Run(runId.getAndIncrement, RunStatus("failure"), failureSpec, model))

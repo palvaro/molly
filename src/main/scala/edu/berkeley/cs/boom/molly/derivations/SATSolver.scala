@@ -30,12 +30,12 @@ object SATSolver extends Logging {
   /**
    * @param failureSpec a description of failures.
    * @param goals a list of goals whose derivations we'll attempt to falsify
-   * @param seed a set of message failures that we already know have occurred,
+   * @param seed a set of message failures and crashes that we already know have occurred,
    *             e.g. from previous runs.
-   * @return all solutions to the SAT problem, as sets of crashes and message omissions
+   * @return all solutions to the SAT problem, formulated as failure specifications
    */
-  def solve(failureSpec: FailureSpec, goals: List[GoalNode], seed: Set[MessageLoss] = Set.empty):
-    Set[(Set[CrashFailure], Set[MessageLoss])] = {
+  def solve(failureSpec: FailureSpec, goals: List[GoalNode], seed: Set[SATVariable] = Set.empty):
+    Set[FailureSpec] = {
     val models = goals.flatMap { goal => solve(failureSpec, goal, seed) }
     logger.info(s"SAT problem has ${models.size} solutions:\n${models.map(_.toString()).mkString("\n")}")
     def isSubset[T](set: Set[T], superset: Set[T]): Boolean = set.forall(e => superset.contains(e))
@@ -43,16 +43,16 @@ object SATSolver extends Logging {
     logger.info(s"Minimal models are: \n${minimalModels.map(_.toString()).mkString("\n")}")
     minimalModels.flatMap { vars =>
       val crashes = vars.filter(_.isInstanceOf[CrashFailure]).map(_.asInstanceOf[CrashFailure])
-      val losses = vars.filter(_.isInstanceOf[MessageLoss]).map(_.asInstanceOf[MessageLoss])
-      if (crashes.isEmpty && losses.isEmpty) {
+      val omissions = vars.filter(_.isInstanceOf[MessageLoss]).map(_.asInstanceOf[MessageLoss])
+      if (crashes.isEmpty && omissions.isEmpty) {
         None
       } else {
-        Some((crashes, losses))
+        Some(failureSpec.copy (crashes = crashes, omissions = omissions))
       }
     }.toSet
   }
 
-  private def solve(failureSpec: FailureSpec, goal: GoalNode, seed: Set[MessageLoss]) = {
+  private def solve(failureSpec: FailureSpec, goal: GoalNode, seed: Set[SATVariable]) = {
     val solver = SolverFactory.newLight()
 
     // Crash failures:
