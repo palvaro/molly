@@ -36,9 +36,24 @@ object SATSolver extends Logging {
    */
   def solve(failureSpec: FailureSpec, goals: List[GoalNode], seed: Set[MessageLoss] = Set.empty):
     Set[(Set[CrashFailure], Set[MessageLoss])] = {
-    val solver = SolverFactory.newLight()
+    val models = goals.flatMap { goal => solve(failureSpec, goal, seed) }
+    logger.info(s"SAT problem has ${models.size} solutions:\n${models.map(_.toString()).mkString("\n")}")
+    def isSubset[T](set: Set[T], superset: Set[T]): Boolean = set.forall(e => superset.contains(e))
+    val minimalModels = models.filterNot { m => models.exists(m2 => m != m2 && isSubset(m2, m) )}
+    logger.info(s"Minimal models are: \n${minimalModels.map(_.toString()).mkString("\n")}")
+    minimalModels.flatMap { vars =>
+      val crashes = vars.filter(_.isInstanceOf[CrashFailure]).map(_.asInstanceOf[CrashFailure])
+      val losses = vars.filter(_.isInstanceOf[MessageLoss]).map(_.asInstanceOf[MessageLoss])
+      if (crashes.isEmpty && losses.isEmpty) {
+        None
+      } else {
+        Some((crashes, losses))
+      }
+    }.toSet
+  }
 
-    // Basic variable creation and constraints
+  private def solve(failureSpec: FailureSpec, goal: GoalNode, seed: Set[MessageLoss]) = {
+    val solver = SolverFactory.newLight()
 
     // Crash failures:
     for (node <- failureSpec.nodes) {
@@ -54,7 +69,6 @@ object SATSolver extends Logging {
 
     // Message losses:
     for (
-      goal <- goals;
       derivation <- goal.enumerateDistinctDerivations;
       importantClocks = derivation.importantClocks;
       // Only allow failures before the EFF:
@@ -78,20 +92,12 @@ object SATSolver extends Logging {
     val modelIterator = new ModelIterator(solver)
     val models = ArrayBuffer[Set[SATVariable]]()
     while (modelIterator.isSatisfiable(assumptions)) {
-      models += modelIterator.model().filter(_ > 0).map(idToSatVariable).toSet
-    }
-    logger.info(s"SAT problem has ${models.size} solutions:\n${models.map(_.toString()).mkString("\n")}")
-    def isSubset[T](set: Set[T], superset: Set[T]): Boolean = set.forall(e => superset.contains(e))
-    val minimalModels = models.filterNot { m => models.exists(m2 => m != m2 && isSubset(m2, m) )}
-    logger.info(s"Minimal models are: \n${minimalModels.map(_.toString()).mkString("\n")}")
-    minimalModels.flatMap { vars =>
-      val crashes = vars.filter(_.isInstanceOf[CrashFailure]).map(_.asInstanceOf[CrashFailure])
-      val losses = vars.filter(_.isInstanceOf[MessageLoss]).map(_.asInstanceOf[MessageLoss])
-      if (crashes.isEmpty && losses.isEmpty) {
-        None
-      } else {
-        Some((crashes, losses))
+      val newModel = modelIterator.model().filter(_ > 0).map(idToSatVariable).toSet
+      // Exclude models where no failures or crashes occurred:
+      if (!newModel.filter(!_.isInstanceOf[NeverCrashed]).isEmpty) {
+        models += newModel
       }
-    }.toSet
+    }
+    models
   }
 }
