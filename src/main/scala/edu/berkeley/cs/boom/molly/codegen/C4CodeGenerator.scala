@@ -26,7 +26,10 @@ object C4CodeGenerator extends PrettyPrinter {
   }
 
   private def genRule(rule: Rule): Doc = {
-    genPredicate(rule.head) <+> ":-" <+> ssep(rule.body.map {
+    // Place negated predicates at the end of the rule body.
+    // This is a workaround for a C4 bug: https://github.com/bloom-lang/c4/issues/1
+    val sortedBody = rule.body.sortBy(_.left.map(p => if (p.notin) 1 else 0).left.getOrElse(0))
+    genPredicate(rule.head) <+> ":-" <+> ssep(sortedBody.map {
       case Left(p: Predicate) => genPredicate(p)
       case Right(e: Expr) => genAtom(e)
     }, ", ") <> semi
