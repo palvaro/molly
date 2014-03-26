@@ -29,7 +29,10 @@ object DedalusRewrites {
     def rewriteBodyElem(elem: Either[Predicate, Expr]): Either[Predicate, Expr] =
       elem match {
         case r @ Right(expr) => r
-        case Left(pred) => Left(pred.copy(cols = pred.cols ++ List(nreserved)))
+        case Left(pred) => pred.time match {
+          case Some(Tick(t)) => Left(pred.copy(cols = pred.cols ++ List(IntLiteral(t))))
+          case _ => Left(pred.copy(cols = pred.cols ++ List(nreserved)))
+        }
       }
 
     def rewriteRule(rule: Rule): Rule = rule match {
