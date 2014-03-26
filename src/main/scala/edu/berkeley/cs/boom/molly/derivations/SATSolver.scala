@@ -40,7 +40,8 @@ object SATSolver extends Logging {
     }
   }
 
-  private def solve(failureSpec: FailureSpec, goal: GoalNode, seed: Set[SATVariable]) = {
+  private def solve(failureSpec: FailureSpec, goal: GoalNode, seed: Set[SATVariable]):
+    Traversable[Set[SATVariable]] = {
     val solver = SolverFactory.newLight()
 
     val idToSatVariable = mutable.HashMap[Int, SATVariable]()
@@ -57,8 +58,13 @@ object SATSolver extends Logging {
     // Crash failures:
     // Only nodes that sent messages will be candidates for crashing:
     val importantNodes =
-      goal.enumerateDistinctDerivations.flatMap(_.importantClocks).map(_._1).toSet
-    logger.debug(s"Important nodes are $importantNodes")
+      goal.enumerateDistinctDerivations.flatMap(_.importantClocks).filter(_._3 < failureSpec.eff).map(_._1).toSet
+    if (importantNodes.isEmpty) {
+      logger.debug(s"Goal ${goal.tuple} has no important nodes; skipping SAT solver")
+      return Set.empty
+    } else {
+      logger.debug(s"Goal ${goal.tuple} has important nodes $importantNodes")
+    }
     for (
       node <- failureSpec.nodes
       if importantNodes.contains(node)
