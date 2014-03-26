@@ -29,7 +29,7 @@ case class FailureSpec(
       a <- nodes;
       b <- nodes;
       t <- 1 to eot
-      if !crashes.exists(c => c.node == a && c.time <= t)
+      if a == b || !crashes.exists(c => c.node == a && c.time <= t)
       if !omissions.exists(o => o.from == a && o.to == b && o.time == t)
     ) yield Predicate("clock", List(StringLiteral(a), StringLiteral(b), IntLiteral(t), IntLiteral(t+1)), notin = false, None)
   }

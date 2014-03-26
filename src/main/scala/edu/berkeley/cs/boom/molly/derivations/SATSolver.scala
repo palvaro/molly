@@ -36,7 +36,7 @@ object SATSolver extends Logging {
    */
   def solve(failureSpec: FailureSpec, goals: List[GoalNode], seed: Set[SATVariable] = Set.empty):
     Set[FailureSpec] = {
-    val models = goals.flatMap { goal => solve(failureSpec, goal, seed) }
+    val models = goals.flatMap { goal => solve(failureSpec, goal, seed) }.toSet
     logger.info(s"SAT problem has ${models.size} solutions:\n${models.map(_.toString()).mkString("\n")}")
     def isSubset[T](set: Set[T], superset: Set[T]): Boolean = set.forall(e => superset.contains(e))
     val minimalModels = models.filterNot { m => models.exists(m2 => m != m2 && isSubset(m2, m) )}
@@ -49,7 +49,7 @@ object SATSolver extends Logging {
       } else {
         Some(failureSpec.copy (crashes = crashes, omissions = omissions))
       }
-    }.toSet
+    }
   }
 
   private def solve(failureSpec: FailureSpec, goal: GoalNode, seed: Set[SATVariable]) = {
