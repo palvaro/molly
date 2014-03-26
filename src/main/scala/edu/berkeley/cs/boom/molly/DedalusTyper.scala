@@ -34,6 +34,7 @@ object DedalusTyper {
           case Identifier("MRESERVED") => INT
           case Identifier("NRESERVED") => INT
           case StringLiteral(_) => STRING
+          case IntLiteral(_) => INT
           case a: Aggregate => INT
           case e: Expr => INT
           case _ => UNKNOWN
@@ -96,6 +97,8 @@ object DedalusTyper {
         }
       }
     }
+
+    assert (!knownTypes.values.flatten.toSeq.contains(UNKNOWN), "Failed to determine a col type")
 
     val tables = knownTypes.toSeq.map(x => Table(x._1, x._2.toList)).toSet
     program.copy(tables = tables)

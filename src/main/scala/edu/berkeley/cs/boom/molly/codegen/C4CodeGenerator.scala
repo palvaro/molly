@@ -22,7 +22,7 @@ object C4CodeGenerator extends PrettyPrinter {
     case IntLiteral(i) => text(i.toString)
     case Identifier(i) => text(i)
     case Expr(c, o, e) => genAtom(c) <+> o <+> genAtom(e)
-    // TODO: case Aggregate
+    case Aggregate(aggName, aggCol) => aggName <> angles(aggCol)
   }
 
   private def genRule(rule: Rule): Doc = {
