@@ -14,7 +14,7 @@ case class FailureSpec(
 
   require(maxCrashes <= nodes.size, "Can't have more crashes than nodes")
   require(crashes.size <= maxCrashes, "Can't specify more than maxCrashes crashes")
-  require(omissions.forall(_.time <= eff), "Can't have omissions after EFF")  // TODO: <= or < ?
+  require(omissions.forall(_.time < eff), "Can't have omissions at or after the EFF")
 
   import ArithmeticUtils._
 
