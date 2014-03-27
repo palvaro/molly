@@ -39,16 +39,19 @@ object DedalusRewrites {
 
     def rewriteRule(rule: Rule): Rule = rule match {
       case Rule(head, body) =>
-        head.time match {
+        // Match the Ruby solver's convention that a predicate's location column always appears
+        // as the first column of its first body predicate:
+        val loc = rule.bodyPredicates(0).cols(0)
+        rule.head.time match {
           case None =>
             // For local rules, we still need to reference the clock in order to guarantee that the
             // clock variable appears in a non-negated body predicate.  We use localClock in order
             // to reduce the number of possible derivations.
-            Rule(head.copy(cols = head.cols ++ List(nreserved)), body.map(rewriteBodyElem) ++ List(Left(localClock(head.cols(0)))))
+            Rule(head.copy(cols = head.cols ++ List(nreserved)), body.map(rewriteBodyElem) ++ List(Left(localClock(loc))))
           case Some(time) =>
             time match {
               case Next() =>
-                Rule(rewriteHead(head, Next()), body.map(rewriteBodyElem) ++ List(Left(nextClock(head.cols(0)))))
+                Rule(rewriteHead(head, Next()), body.map(rewriteBodyElem) ++ List(Left(nextClock(loc))))
               case Async() =>
                 val from = rule.bodyPredicates(0).cols(0)
                 val to = head.cols(0)
