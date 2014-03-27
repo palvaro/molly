@@ -104,6 +104,63 @@ object ProvenanceReader extends Logging {
   private def buildRGG(program: Program, model: UltimateModel)(goalTuple: GoalTuple): GoalNode = {
     logger.debug(s"Reading provenance for tuple $goalTuple")
     // First, check whether the goal tuple is part of the EDB:
+    if (isInEDB(program, goalTuple)) {
+      logger.debug(s"Found $goalTuple in EDB")
+      return GoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
+    }
+    // Otherwise, a rule must have derived it:
+    val ruleFirings = findRuleFirings(program, model, goalTuple)
+    assert (!ruleFirings.isEmpty, s"Couldn't find rules to derive tuple $goalTuple")
+    logger.debug(s"Rule firings: $ruleFirings")
+    val ruleNodes = ruleFirings.map { case (provRuleName, provTableRow) =>
+      val provRule = program.rules.find(_.head.tableName == provRuleName).get
+      val bindings = provRowToVariableBindings(provRule, provTableRow)
+      // Substitute the variable bindings to determine the set of goals used by this rule.
+      def substituteBindings(pred: Predicate): GoalTuple = {
+        val goalCols = pred.cols.map {
+          case StringLiteral(s) => s
+          case IntLiteral(i) => i.toString
+          case Identifier(ident) => bindings(ident)
+          case agg: Aggregate =>
+            throw new NotImplementedError("Don't know how to substitute for aggregate")
+          case expr: Expr =>
+            throw new NotImplementedError("Didn't expect expression to appear in predicate")
+        }
+        GoalTuple(pred.tableName, goalCols)
+      }
+      val newGoalTuples = provRule.bodyPredicates.filterNot(_.notin).map(substituteBindings)
+      logger.debug(s"New subgoal tuples are $newGoalTuples")
+      // As a sanity check, make sure that negated tuples don't appear in their respective tables
+      // or any provenance tables:
+      val notinTuples = provRule.bodyPredicates.filter(_.notin).map(substituteBindings)
+      for (tuple <- notinTuples) {
+        val matchingTuples = model.tables(tuple.table).filter(matchesPattern(tuple.cols))
+        val ruleFirings = findRuleFirings(program, model, tuple)
+        val internallyConsistent = matchingTuples.isEmpty == ruleFirings.isEmpty
+        assert(internallyConsistent, "sTuple $tuple found without derivation (or vice-versa)")
+        assert(matchingTuples.isEmpty, s"Found tuple ${matchingTuples(0)} that appears in a notin")
+        assert(ruleFirings.isEmpty,
+          s"Found rule firings $ruleFirings for tuple $tuple that appears in a notin")
+      }
+      // Recursively compute the provenance of the new goals:
+      RuleNode(nextRuleNodeId.getAndIncrement,
+        provRule, newGoalTuples.map(buildRGG(program, model)).toSet)
+    }
+    GoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes)
+  }
+
+  private def findRuleFirings(program: Program, model: UltimateModel, goalTuple: GoalTuple) = {
+    // Find provenance tables that might explain how we derived `goalTuple`:
+    val provTables = program.tables.map(_.name).filter(_.matches(s"^${goalTuple.table}_prov\\d+"))
+    logger.debug(s"Table '${goalTuple.table}' has provenance tables $provTables")
+    // Check which of them have matching facts:
+    provTables.map(table => (table, searchProvTable(goalTuple.cols, model.tables(table))))
+      .filter(_._2.isDefined).map(x => (x._1, x._2.get))
+  }
+
+  val WILDCARD = "__WILDCARD__"
+
+  private def isInEDB(program: Program, goalTuple: GoalTuple): Boolean = {
     val goalEDB = program.facts.filter(_.tableName == goalTuple.table)
     for (fact <- goalEDB) {
       val list = fact.cols.map {
@@ -113,45 +170,11 @@ object ProvenanceReader extends Logging {
           s"Facts shouldn't contain aggregates, expressions, or variables, but found $v")
       }
       if (matchesPattern(goalTuple.cols)(list)) {
-        logger.debug(s"Found $goalTuple in EDB")
-        return GoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
+        return true
       }
     }
-    // Find provenance tables that might explain how we derived `goalTuple`:
-    val provTables = program.tables.map(_.name).filter(_.matches(s"^${goalTuple.table}_prov\\d+"))
-    logger.debug(s"Table '${goalTuple.table}' has provenance tables $provTables")
-    // Check which of them have matching facts:
-    val ruleFirings =
-      provTables.map(table => (table, searchProvTable(goalTuple.cols, model.tables(table))))
-                .filter(_._2.isDefined).map(x => (x._1, x._2.get))
-    assert (!ruleFirings.isEmpty, s"Couldn't find rules to derive tuple $goalTuple")
-    logger.debug(s"Rule firings: $ruleFirings")
-    val ruleNodes = ruleFirings.map { case (provRuleName, provTableRow) =>
-      val provRule = program.rules.find(_.head.tableName == provRuleName).get
-      val bindings = provRowToVariableBindings(provRule, provTableRow)
-      // Substitute the variable bindings to determine the set of goals used by this rule.
-      val newGoalTuples = provRule.bodyPredicates.filterNot(_.notin).map { pred =>
-        val cols = pred.cols.map {
-          case StringLiteral(s) => s
-          case IntLiteral(i) => i.toString
-          case Identifier(ident) => bindings(ident)
-          case agg: Aggregate =>
-            throw new NotImplementedError("Don't know how to substitute for aggregate")
-          case expr: Expr =>
-            throw new NotImplementedError("Didn't expect expression to appear in predicate")
-        }
-        GoalTuple(pred.tableName, cols)
-      }
-      logger.debug(s"New subgoal tuples are $newGoalTuples")
-      // Recursively compute the provenance of those goals:
-      RuleNode(nextRuleNodeId.getAndIncrement,
-        provRule, newGoalTuples.map(buildRGG(program, model)).toSet)
-    }
-    GoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes)
+    false
   }
-
-
-  val WILDCARD = "__WILDCARD__"
 
   /**
    * Check tuples for compatibility while accounting for wildcards.
