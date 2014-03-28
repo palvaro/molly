@@ -56,20 +56,20 @@ object SATSolver extends Logging {
     implicit def satVarsToVecInt(clause: Iterable[SATVariable]): IVecInt =
       new VecInt(clause.map(satVarToInt).toArray)
 
+    val distinctGoalDerivations = goal.enumerateDistinctDerivations
     // Crash failures:
-    // Only nodes that sent messages will be candidates for crashing:
-    val importantNodes =
-      goal.enumerateDistinctDerivations.flatMap(_.importantClocks).filter(_._3 < failureSpec.eff).map(_._1).toSet
+    // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
+    // will be candidates for crashing:
+    val importantNodes: Set[String] =
+      distinctGoalDerivations.flatMap(_.importantClocks).filter(_._3 < failureSpec.eff).map(_._1).toSet ++
+      seed.filter(_.isInstanceOf[CrashFailure]).map(_.asInstanceOf[CrashFailure].node)
     if (importantNodes.isEmpty) {
       logger.debug(s"Goal ${goal.tuple} has no important nodes; skipping SAT solver")
       return Set.empty
     } else {
       logger.debug(s"Goal ${goal.tuple} has important nodes $importantNodes")
     }
-    for (
-      node <- failureSpec.nodes
-      if importantNodes.contains(node)
-    ) {
+    for (node <- importantNodes) {
       // Create one variable for every time at which the node could crash:
       val crashVars = (0 to failureSpec.eff - 1).map(t => CrashFailure(node, t))
       // An extra variable for scenarios where the node didn't crash:
@@ -78,11 +78,11 @@ object SATSolver extends Logging {
       solver.addExactly(crashVars ++ Seq(neverCrashed), 1)
     }
     // If there are at most C crashes, then at least (N - C) nodes never crash:
-    solver.addExactly(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.maxCrashes)
+    solver.addAtLeast(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.maxCrashes)
 
     // Message losses:
     for (
-      derivation <- goal.enumerateDistinctDerivations;
+      derivation <- distinctGoalDerivations;
       importantClocks = derivation.importantClocks;
       // Only allow failures before the EFF:
       failures = importantClocks.filter(_._3 < failureSpec.eff)
@@ -92,9 +92,9 @@ object SATSolver extends Logging {
       // The message could be missing due to a message loss or due to its
       // sender having crashed at an earlier timestamp:
       val messageLosses = failures.map(MessageLoss.tupled)
-      val crashes = failures.flatMap { case (from, _, time) =>
-        val crashTimes = 0 to time
-        crashTimes.map ( t => CrashFailure(from, t))
+      val crashes = messageLosses.flatMap { loss =>
+        val crashTimes = 0 to loss.time
+        crashTimes.map ( t => CrashFailure(loss.from, t))
       }
       solver.addClause(messageLosses ++ crashes)
     }
