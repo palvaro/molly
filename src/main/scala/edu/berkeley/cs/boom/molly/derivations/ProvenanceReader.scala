@@ -54,14 +54,12 @@ case class GoalTuple(table: String, cols: List[String]) {
 case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) {
   def importantClocks: Set[(String, String, Int)] = {
     val childrenClocks = rules.flatMap(_.subgoals).flatMap(_.importantClocks)
-    if (tuple.table == "clock" && tuple.cols(1) != ProvenanceReader.WILDCARD) {
-      val from = tuple.cols(0)
-      val to = tuple.cols(1)
-      val time = tuple.cols(2).toInt
-      childrenClocks ++ Set((from, to, time))
-    } else {
-      childrenClocks
+    val newClock = tuple match {
+      case GoalTuple("clock", List(from, to, time, _))
+        if from != to && to != ProvenanceReader.WILDCARD => Set((from, to, time.toInt))
+      case _ => Set.empty
     }
+    childrenClocks ++ newClock
   }
 
   def enumerateDistinctDerivations: Set[GoalNode] = {

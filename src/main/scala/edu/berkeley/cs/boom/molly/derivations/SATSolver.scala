@@ -14,7 +14,9 @@ object SATSolver extends Logging {
   sealed trait SATVariable
   case class CrashFailure(node: String, time: Int) extends SATVariable
   case class NeverCrashed(node: String) extends SATVariable
-  case class MessageLoss(from: String, to: String, time: Int) extends SATVariable
+  case class MessageLoss(from: String, to: String, time: Int) extends SATVariable {
+    require (from != to, "Can't lose messages sent to self")
+  }
 
   /**
    * @param failureSpec a description of failures.
