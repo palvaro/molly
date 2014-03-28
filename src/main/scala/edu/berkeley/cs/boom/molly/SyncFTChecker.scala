@@ -40,19 +40,24 @@ object SyncFTChecker extends Logging {
     )
   }
 
+  def check(config: Config): Traversable[Run] = {
+    val combinedInput = config.inputPrograms.flatMap(Source.fromFile(_).getLines()).mkString("\n")
+    val parseResults = DedalusParser.parseProgram(combinedInput)
+    val includeSearchPath = config.inputPrograms(0).getParentFile
+    val parseResultsWithIncludes = processIncludes(parseResults, includeSearchPath)
+    val rewrite = referenceClockRules _ andThen addProvenanceRules
+    val program = rewrite(parseResultsWithIncludes)
+    val failureSpec = new FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
+    val verifier = new Verifier(failureSpec, program)
+    logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
+    verifier.verify
+  }
+
   def main(args: Array[String]) {
     parser.parse(args, Config()) map { config =>
-      val combinedInput = config.inputPrograms.flatMap(Source.fromFile(_).getLines()).mkString("\n")
-      val parseResults = DedalusParser.parseProgram(combinedInput)
-      val includeSearchPath = config.inputPrograms(0).getParentFile
-      val parseResultsWithIncludes = processIncludes(parseResults, includeSearchPath)
-      val rewrite = referenceClockRules _ andThen addProvenanceRules
-      val program = rewrite(parseResultsWithIncludes)
-      val failureSpec = new FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
-      val verifier = new Verifier(failureSpec, program)
-      logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
+      val results = check(config)
       // TODO: name the output directory after the input filename and failure spec.
-      HTMLWriter.write(new File("output"), Nil, verifier.verify)
+      HTMLWriter.write(new File("output"), Nil, results)
     } getOrElse {
       // Error messages
     }
