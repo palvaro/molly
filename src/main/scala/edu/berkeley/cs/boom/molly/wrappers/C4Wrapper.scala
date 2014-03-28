@@ -19,7 +19,7 @@ class C4Wrapper(name: String, program: Program) extends Logging {
       val rulesPlusNonClockFacts = C4CodeGenerator.generate(program.copy(facts=nonClockFacts))
       logger.debug("C4 input minus clock facts is:\n" + rulesPlusNonClockFacts)
       assert(C4Wrapper.libC4.c4_install_str(c4, rulesPlusNonClockFacts) == 0)
-      val clockFactsByTime = clockFacts.groupBy(_.cols(3).asInstanceOf[IntLiteral].int)
+      val clockFactsByTime = clockFacts.groupBy(_.cols(2).asInstanceOf[IntLiteral].int)
       for ((time, facts) <- clockFactsByTime.toSeq.sortBy(_._1)) {
         val clockFactsProgram = C4CodeGenerator.generate(new Program(Nil, facts, Nil))
         logger.debug(s"Installing clock facts for time $time:\n$clockFactsProgram")

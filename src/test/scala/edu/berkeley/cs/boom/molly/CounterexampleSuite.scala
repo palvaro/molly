@@ -13,14 +13,14 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
     ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
     (Seq("simplog.ded", "deliv_assert.ded"),      6,      3,     Seq("a", "b", "c"),            0,    true),
     (Seq("rdlog.ded", "deliv_assert.ded"),        6,      3,     Seq("a", "b", "c"),            0,    false),
-    (Seq("rdlog.ded", "deliv_assert.ded"),        6,      2,     Seq("a", "b", "c"),            1,    true),
-    (Seq("classic_rb.ded", "deliv_assert.ded"),   6,      2,     Seq("a", "b", "c"),            0,    true),
-    (Seq("replog.ded", "deliv_assert.ded"),       6,      2,     Seq("a", "b", "c"),            0,    false),
-    (Seq("replog.ded", "deliv_assert.ded"),       6,      2,     Seq("a", "b", "c"),            1,    false),
-    (Seq("ack_rb.ded", "deliv_assert.ded"),       6,      2,     Seq("a", "b", "c"),            1,    false),
-    (Seq("2pc.ded", "2pc_assert.ded"),            7,      2,     Seq("a", "b", "C", "d"),       0,    false),
-    (Seq("2pc.ded", "2pc_assert.ded"),            6,      2,     Seq("a", "b", "C", "d"),       1,    true),
-    (Seq("tokens.ded"),                           6,      2,     Seq("a", "b", "C", "d"),       1,    true)
+    (Seq("rdlog.ded", "deliv_assert.ded"),        6,      3,     Seq("a", "b", "c"),            1,    true),
+    (Seq("classic_rb.ded", "deliv_assert.ded"),   6,      3,     Seq("a", "b", "c"),            0,    true),
+    (Seq("replog.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            0,    false),
+    (Seq("replog.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
+    (Seq("ack_rb.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
+    (Seq("2pc.ded", "2pc_assert.ded"),            7,      3,     Seq("a", "b", "C", "d"),       0,    false),
+    (Seq("2pc.ded", "2pc_assert.ded"),            6,      3,     Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "C", "d"),       1,    true)
   )
 
   property("SAT guided search should correctly find counterexamples") {
