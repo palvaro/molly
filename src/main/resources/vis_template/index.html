@@ -14,6 +14,7 @@
     <h2>Runs</h2>
     <span class="help-block">Click on a run to see more information</span>
     <div id="runs-table"></div>
+    <div id="spacetime"><img src="" class="img-responsive"></div>
     <h2>Table Contents</h2>
     <div id="details-area">
         <div id="table-dumps"></div>
@@ -50,6 +51,7 @@ d3.json("runs.json", function(error, json) {
 
     var displaySelectedRun = function(newRun) {
         tableDumps.selectAll("div").data([]).exit().remove();
+        d3.select("#spacetime img").attr("src", "run_" + (newRun.iteration) + "_spacetime.svg");
         var nonProvTables = d3.entries(newRun.model.tables).filter(function(t) { return t.key != "clock" && t.key.indexOf("_prov") == -1;});
         var tableDivs = tableDumps.selectAll("div")
                 .data(nonProvTables)
@@ -62,6 +64,7 @@ d3.json("runs.json", function(error, json) {
                 .enter().append("table").attr("class", "table table-condensed table-bordered")
                 .append("tbody");
         var rows = tables.selectAll("tr").data(function (t) {
+                if (t.value.length == 0) return t.value;
                 var last = t.value[0].length - 1;
                 return t.value.sort(function(a, b) {return d3.ascending(parseInt(a[last]), parseInt(b[last])); });
             })

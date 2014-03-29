@@ -3,6 +3,7 @@ package edu.berkeley.cs.boom.molly.report
 import argonaut._, Argonaut._
 import edu.berkeley.cs.boom.molly.{Run, RunStatus, FailureSpec, UltimateModel}
 import edu.berkeley.cs.boom.molly.derivations.SATSolver.{MessageLoss, CrashFailure}
+import edu.berkeley.cs.boom.molly.derivations.Message
 
 /**
  * Argonaut CodecJsons for converting our objects to JSON;
@@ -18,7 +19,7 @@ object MollyCodecJsons {
                       StringDecodeJson.map(RunStatus.apply))
 
   implicit def RunCodecJson: CodecJson[Run] =
-    casecodec4(Run.apply, Run.unapply)("iteration", "status", "failureSpec", "model")
+    casecodec5(Run.apply, Run.unapply)("iteration", "status", "failureSpec", "model", "messages")
 
   implicit def FailureSpecCodecJson: CodecJson[FailureSpec] =
     casecodec6(FailureSpec.apply, FailureSpec.unapply)("eot", "eff", "maxCrashes", "nodes",
@@ -29,5 +30,8 @@ object MollyCodecJsons {
 
   implicit def MessageLossCodecJson: CodecJson[MessageLoss] =
     casecodec3(MessageLoss.apply, MessageLoss.unapply)("from", "to", "time")
+
+  implicit def MessageCodecJson: CodecJson[Message] =
+    casecodec5(Message.apply, Message.unapply)("table", "from", "to", "sendTime", "receiveTime")
 
 }

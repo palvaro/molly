@@ -11,6 +11,7 @@ case class FailureSpec(
   nodes: List[String],
   crashes: Set[CrashFailure] = Set.empty,
   omissions: Set[MessageLoss] = Set.empty) {
+  import FailureSpec._
 
   require(maxCrashes <= nodes.size, "Can't have more crashes than nodes")
   require(crashes.size <= maxCrashes, "Can't specify more than maxCrashes crashes")
@@ -30,11 +31,25 @@ case class FailureSpec(
       b <- nodes;
       t <- 1 to eot
       if a == b || !crashes.exists(c => c.node == a && c.time <= t)
-      if !omissions.exists(o => o.from == a && o.to == b && o.time == t)
-    ) yield Predicate("clock", List(StringLiteral(a), StringLiteral(b), IntLiteral(t), IntLiteral(t+1)), notin = false, None)
+    ) yield {
+      val deliveryTime =
+        if (omissions.exists(o => o.from == a && o.to == b && o.time == t))
+          NEVER
+        else
+          t + 1
+      Predicate("clock", List(StringLiteral(a), StringLiteral(b), IntLiteral(t), IntLiteral(deliveryTime)), notin = false, None)
+    }
   }
 
   def addClockFacts(program: Program): Program = {
     program.copy(facts = program.facts ++ generateClockFacts)
   }
+}
+
+
+object FailureSpec {
+  /**
+   * Time at which lost messages are delivered.
+   */
+  val NEVER = 99999
 }

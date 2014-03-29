@@ -86,6 +86,8 @@ case class RuleNode(id: Int, rule: Rule, subgoals: Set[GoalNode]) {
   }
 }
 
+case class Message(table: String, from: String, to: String, sendTime: Int, receiveTime: Int)
+
 object ProvenanceReader {
   val WILDCARD = "__WILDCARD__"
 }
@@ -107,6 +109,26 @@ class ProvenanceReader(program: Program,
 
   def getDerivationTreesForTable(goal: String): List[GoalNode] = {
     model.tableAtTime(goal, failureSpec.eot).map(GoalTuple(goal, _)).map(getDerivationTree)
+  }
+
+  def getMessages: List[Message] = {
+    val asyncRules = program.rules.filter(_.head.time == Some(Async()))
+    logger.debug(s"Async rules are ${asyncRules.map(_.head.tableName)}")
+    val tableNamePattern = """^(.*)_prov\d+$""".r
+    asyncRules.flatMap { rule =>
+      model.tables(rule.head.tableName).flatMap { tuple =>
+        val bindings = provRowToVariableBindings(rule, tuple)
+        val from = bindings(rule.head.cols(0).asInstanceOf[Identifier].name)
+        val to = bindings(rule.bodyPredicates(0).cols(0).asInstanceOf[Identifier].name)
+        val sendTime = bindings("NRESERVED").toInt
+        val receiveTime = bindings("MRESERVED").toInt
+        val tableName = tableNamePattern.findFirstMatchIn(rule.head.tableName).get.group(1)
+        if (sendTime != failureSpec.eot)
+          Some(Message(tableName, from, to, sendTime, receiveTime))
+        else
+          None
+      }
+    }
   }
 
   private def buildDerivationTree(goalTuple: GoalTuple): GoalNode = {
