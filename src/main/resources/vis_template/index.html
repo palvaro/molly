@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+<head>
+    <title>SyncFT Results</title>
+    <script src="d3.min.js"></script>
+    <script src="jquery.min.js"></script>
+    <script src="bootstrap.min.js"></script>
+    <link rel="stylesheet" href="bootstrap.min.css">
+</head>
+<body>
+
+<div class="container">
+    <h2>Runs</h2>
+    <span class="help-block">Click on a run to see more information</span>
+    <div id="runs-table"></div>
+    <h2>Table Contents</h2>
+    <div id="details-area">
+        <div id="table-dumps"></div>
+    </div>
+</div>
+
+<script>
+var runs = [];
+var selectedRun = null;
+d3.json("runs.json", function(error, json) {
+
+    var runsTable = d3.select("#runs-table").append("table").attr("class", "table table-condensed");
+    thead = runsTable.append("thead");
+    tbody = runsTable.append("tbody");
+
+    thead.append("th").text("Iteration");
+    thead.append("th").text("Status");
+    thead.append("th").text("Crashes");
+    thead.append("th").text("Message losses");
+
+    var tableDumps = d3.select("#table-dumps");
+
+    json.forEach(function (run) {
+        runs.push(run);
+    });
+
+    var formatCrash = function(crash) {
+        return crash.node + "@" + crash.time;
+    };
+
+    var formatMessageLoss = function(loss) {
+        return loss.from + " ==> " + loss.to + " @ " + loss.time;
+    };
+
+    var displaySelectedRun = function(newRun) {
+        tableDumps.selectAll("div").data([]).exit().remove();
+        var nonProvTables = d3.entries(newRun.model.tables).filter(function(t) { return t.key != "clock" && t.key.indexOf("_prov") == -1;});
+        var tableDivs = tableDumps.selectAll("div")
+                .data(nonProvTables)
+                .enter().append("div");
+        tableDivs.selectAll("h3")
+                .data(function(t) { return [t]; })
+                .enter().append("h3").text(function (t) { return t.key; });
+        var tables = tableDivs.selectAll("table tbody")
+                .data(function(t) { return [t]; })
+                .enter().append("table").attr("class", "table table-condensed table-bordered")
+                .append("tbody");
+        var rows = tables.selectAll("tr").data(function (t) {
+                var last = t.value[0].length - 1;
+                return t.value.sort(function(a, b) {return d3.ascending(parseInt(a[last]), parseInt(b[last])); });
+            })
+                .enter().append("tr");
+        var cols = rows.selectAll("td").data(function(d) { return d; })
+                .enter().append("td")
+                .text(function(d) { return d; });
+    };
+
+    var tr = tbody.selectAll("tr")
+            .data(runs)
+            .enter().append("tr")
+            .on("click", function () {
+                if (selectedRun !== null)
+                    d3.select(selectedRun).classed("active", false);
+                d3.select(this).classed("active", true);
+                selectedRun = this;
+                displaySelectedRun(d3.select(this).data()[0]);
+            });
+
+    var td = tr.selectAll("td")
+            .data(function (run) {
+                return [
+                    run.iteration,
+                    run.status,
+                    run.failureSpec.crashes.map(formatCrash).join(", "),
+                    run.failureSpec.omissions.map(formatMessageLoss).join(", ")];
+            })
+            .enter().append("td")
+            .text(function (d) { return d; });
+});
+</script>
+</body>
+</html>
