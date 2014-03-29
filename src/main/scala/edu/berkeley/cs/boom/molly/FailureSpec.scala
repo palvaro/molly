@@ -32,11 +32,10 @@ case class FailureSpec(
       t <- 1 to eot
     ) yield {
       val senderCrashed = crashes.exists(c => c.node == from && c.time <= t)
-      val receiverCrashed = crashes.exists(c => c.node == to && c.time <= t + 1)
       val messageLost = omissions.exists(o => o.from == from && o.to == to && o.time == t)
       val deliveryTime = if (from != to && messageLost) NEVER else t + 1
       val isLocalDeductiveStep = from == to  // To allow vacuous good() rules to fire
-      if (isLocalDeductiveStep || (!senderCrashed && !receiverCrashed))
+      if (isLocalDeductiveStep || !senderCrashed)
         Some(Predicate("clock", List(StringLiteral(from), StringLiteral(to), IntLiteral(t), IntLiteral(deliveryTime)), notin = false, None))
       else None
     }
