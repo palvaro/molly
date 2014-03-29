@@ -73,7 +73,7 @@ object SATSolver extends Logging {
     }
     for (node <- importantNodes) {
       // Create one variable for every time at which the node could crash:
-      val crashVars = (0 to failureSpec.eff - 1).map(t => CrashFailure(node, t))
+      val crashVars = (1 to failureSpec.eff - 1).map(t => CrashFailure(node, t))
       // An extra variable for scenarios where the node didn't crash:
       val neverCrashed = NeverCrashed(node)
       // Each node crashes at a single time, or never crashes:
@@ -95,7 +95,7 @@ object SATSolver extends Logging {
       // sender having crashed at an earlier timestamp:
       val messageLosses = failures.map(MessageLoss.tupled)
       val crashes = messageLosses.flatMap { loss =>
-        val crashTimes = 0 to loss.time
+        val crashTimes = 1 to loss.time
         crashTimes.map ( t => CrashFailure(loss.from, t))
       }
       solver.addClause(messageLosses ++ crashes)
