@@ -33,8 +33,8 @@ object SATSolver extends Logging {
     val minimalModels = models.filterNot { m => models.exists(m2 => m != m2 && isSubset(m2, m) )}
     logger.info(s"Minimal models are: \n${minimalModels.map(_.toString()).mkString("\n")}")
     minimalModels.flatMap { vars =>
-      val crashes = vars.filter(_.isInstanceOf[CrashFailure]).map(_.asInstanceOf[CrashFailure])
-      val omissions = vars.filter(_.isInstanceOf[MessageLoss]).map(_.asInstanceOf[MessageLoss])
+      val crashes = vars.collect { case cf: CrashFailure => cf }
+      val omissions = vars.collect { case ml: MessageLoss => ml }
       if (crashes.isEmpty && omissions.isEmpty) {
         None
       } else {
@@ -64,7 +64,7 @@ object SATSolver extends Logging {
     // will be candidates for crashing:
     val importantNodes: Set[String] =
       distinctGoalDerivations.flatMap(_.importantClocks).filter(_._3 < failureSpec.eff).map(_._1).toSet ++
-      seed.filter(_.isInstanceOf[CrashFailure]).map(_.asInstanceOf[CrashFailure].node)
+      seed.collect { case cf: CrashFailure => cf.node }
     if (importantNodes.isEmpty) {
       logger.debug(s"Goal ${goal.tuple} has no important nodes; skipping SAT solver")
       return Set.empty

@@ -76,7 +76,7 @@ object DedalusRewrites {
       // We also record the values of variables that appear in expressions in order to
       // avoid the need to invert those expressions to recover the variable bindings
       // inside the ProvenanceReader.
-      val headExprVars = rule.head.cols.filter(_.isInstanceOf[Expr]).map(_.asInstanceOf[Expr])
+      val headExprVars = rule.head.cols.collect { case e: Expr => e }
         .flatMap(_.variables).map(_.name)
       val allVariables = rule.variablesWithIndexes.map(_._1).toSet ++
         rule.bodyQuals.flatMap(_.variables).map(_.name) ++ headExprVars

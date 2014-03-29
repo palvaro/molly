@@ -25,9 +25,9 @@ trait DedalusParser extends PositionedParserUtilities {
   }
 
   lazy val program: Parser[Program] = rep(clause) ^^ { clauses =>
-    Program(clauses.filter(_.isInstanceOf[Rule]).map(_.asInstanceOf[Rule]),
-      clauses.filter(_.isInstanceOf[Predicate]).map(_.asInstanceOf[Predicate]),
-      clauses.filter(_.isInstanceOf[Include]).map(_.asInstanceOf[Include]))
+    Program(clauses.collect { case r: Rule => r },
+      clauses.collect { case p: Predicate => p },
+      clauses.collect { case i: Include => i })
   }
   lazy val clause: Parser[Clause] = include | rule | fact
   lazy val include = "include" ~> string <~ semi ^^ Include
