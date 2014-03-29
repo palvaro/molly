@@ -89,11 +89,11 @@ object DedalusRewrites {
     }
     // Rewrite the program's rule bodies to reference the provenance rules
     val rewrittenRules = program.rules.zip(provenanceRules).map { case (rule, provRule) =>
-      // Rewrite the time columns so they don't contain expressions:
-      val head = rule.head.copy(time = None, cols = rule.head.cols.take(rule.head.cols.size - 1) ++ List(nreserved))
-      // Ignore recording of extra variable bindings in the provenance rule:
-      val placeholders = (1 to (provRule.head.cols.size - rule.head.cols.size)).map { _ => dc }
-      val body = provRule.head.copy(cols = provRule.head.cols.take(rule.head.cols.size - 1) ++ placeholders ++ List(nreserved))
+      // Create fresh variable names for use in this rule:
+      val headVars = (1 to rule.head.cols.size - 1).map(n => Identifier(s"X$n")).toList
+      val head = rule.head.copy(time = None, cols = headVars :+ nreserved)
+      val placeholders = List.fill(provRule.head.cols.size - rule.head.cols.size)(dc)
+      val body = provRule.head.copy(cols = headVars ++ placeholders :+ nreserved)
       Rule(head, List(Left(body)))
     }
     program.copy(rules = rewrittenRules ++ provenanceRules)
