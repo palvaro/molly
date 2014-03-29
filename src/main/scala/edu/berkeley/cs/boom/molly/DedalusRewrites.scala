@@ -39,9 +39,7 @@ object DedalusRewrites {
 
     def rewriteRule(rule: Rule): Rule = rule match {
       case Rule(head, body) =>
-        // Match the Ruby solver's convention that a predicate's location column always appears
-        // as the first column of its first body predicate:
-        val loc = rule.bodyPredicates(0).cols(0)
+        val loc = rule.locationSpecifier
         rule.head.time match {
           case None =>
             // For local rules, we still need to reference the clock in order to guarantee that the

@@ -116,13 +116,16 @@ class ProvenanceReader(program: Program,
     logger.debug(s"Async rules are ${asyncRules.map(_.head.tableName)}")
     val tableNamePattern = """^(.*)_prov\d+$""".r
     asyncRules.flatMap { rule =>
+      val clockPred = rule.bodyPredicates.filter(_.tableName == "clock")(0)
+      val fromIdent = clockPred.cols(0).asInstanceOf[Identifier].name
+      val toIdent = clockPred.cols(1).asInstanceOf[Identifier].name
+      val tableName = tableNamePattern.findFirstMatchIn(rule.head.tableName).get.group(1)
       model.tables(rule.head.tableName).flatMap { tuple =>
         val bindings = provRowToVariableBindings(rule, tuple)
-        val from = bindings(rule.head.cols(0).asInstanceOf[Identifier].name)
-        val to = bindings(rule.bodyPredicates(0).cols(0).asInstanceOf[Identifier].name)
+        val from = bindings(fromIdent)
+        val to = bindings(toIdent)
         val sendTime = bindings("NRESERVED").toInt
         val receiveTime = bindings("MRESERVED").toInt
-        val tableName = tableNamePattern.findFirstMatchIn(rule.head.tableName).get.group(1)
         if (sendTime != failureSpec.eot)
           Some(Message(tableName, from, to, sendTime, receiveTime))
         else

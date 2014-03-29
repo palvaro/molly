@@ -41,11 +41,14 @@ case class Table(name: String, types: List[String])
 sealed trait Clause extends Node
 case class Include(file: String) extends Clause
 case class Rule(head: Predicate, body: List[Either[Predicate, Expr]]) extends Clause {
-  def bodyPredicates: List[Predicate] = body.filter(_.isLeft).map(_.left.get)
-  def bodyQuals: List[Expr] = body.filter(_.isRight).map(_.right.get)
+  def bodyPredicates: List[Predicate] = body.collect { case Left(pred) => pred }
+  def bodyQuals: List[Expr] = body.collect { case Right(expr) => expr }
   def variablesWithIndexes: List[(String, (String, Int))] = {
     (List(head) ++ bodyPredicates).flatMap(_.variablesWithIndexes)
   }
+  // Match the Ruby solver's convention that a predicate's location column always appears
+  // as the first column of its first body predicate
+  val locationSpecifier = bodyPredicates(0).cols(0)
 }
 case class Predicate(tableName: String,
                      cols: List[Atom],
