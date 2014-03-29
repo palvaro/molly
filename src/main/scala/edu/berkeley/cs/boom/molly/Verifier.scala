@@ -29,7 +29,8 @@ class Verifier(failureSpec: FailureSpec, program: Program) extends Logging {
 
   def verify: Traversable[Run] = {
     val provenance =
-      ProvenanceReader.read(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel, "good")
+      new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel)
+        .getDerivationTreesForTable("good")
     val satModels = SATSolver.solve(failureSpec, provenance)
     if (satModels.isEmpty) {
       List(Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel))
@@ -50,7 +51,8 @@ class Verifier(failureSpec: FailureSpec, program: Program) extends Logging {
     if (isGood(model)) {
       // This run may have used more channels than the original run; verify
       // that omissions on those new channels don't produce counterexamples:
-      val provenance = ProvenanceReader.read(failProgram, failureSpec, model, "good")
+      val provenance =
+        new ProvenanceReader(failProgram, failureSpec, model).getDerivationTreesForTable("good")
       val seed: Set[SATVariable] = failureSpec.crashes ++ failureSpec.omissions
       val satModels = SATSolver.solve(failureSpec, provenance, seed) -- Set(failureSpec)
       val counterexamples = satModels.flatMap(doVerify).filter(r => r.status == RunStatus("failure"))

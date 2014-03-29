@@ -12,6 +12,7 @@ import edu.berkeley.cs.boom.molly.report.GraphvizPrettyPrinter
 import java.util.concurrent.atomic.AtomicInteger
 import scalaz._
 import Scalaz._
+import scala.collection.mutable
 
 
 object RuleGoalGraphGraphvizGenerator extends GraphvizPrettyPrinter {
@@ -85,29 +86,38 @@ case class RuleNode(id: Int, rule: Rule, subgoals: Set[GoalNode]) {
   }
 }
 
-/**
- * Construct rule-goal graphs from provenance captured during execution.
- */
-object ProvenanceReader extends Logging {
+object ProvenanceReader {
+  val WILDCARD = "__WILDCARD__"
+}
 
+/**
+ * Constructs rule-goal graphs from provenance captured during execution.
+ */
+class ProvenanceReader(program: Program,
+                       failureSpec: FailureSpec,
+                       model: UltimateModel) extends Logging {
+  import ProvenanceReader._
   private val nextRuleNodeId = new AtomicInteger(0)
   private val nextGoalNodeId = new AtomicInteger(0)
+  private val derivationTreeCache = new mutable.HashMap[GoalTuple, GoalNode]()
 
-  def read(program: Program, failureSpec: FailureSpec, model: UltimateModel,
-           goal: String): List[GoalNode] = {
-    def goalFacts = model.tableAtTime(goal, failureSpec.eot).map(GoalTuple(goal, _))
-    goalFacts.map(buildRGG(program, model))
+  def getDerivationTree(goalTuple: GoalTuple): GoalNode = {
+    derivationTreeCache.getOrElseUpdate(goalTuple, buildDerivationTree(goalTuple))
   }
 
-  private def buildRGG(program: Program, model: UltimateModel)(goalTuple: GoalTuple): GoalNode = {
+  def getDerivationTreesForTable(goal: String): List[GoalNode] = {
+    model.tableAtTime(goal, failureSpec.eot).map(GoalTuple(goal, _)).map(getDerivationTree)
+  }
+
+  private def buildDerivationTree(goalTuple: GoalTuple): GoalNode = {
     logger.debug(s"Reading provenance for tuple $goalTuple")
     // First, check whether the goal tuple is part of the EDB:
-    if (isInEDB(program, goalTuple)) {
+    if (isInEDB(goalTuple)) {
       logger.debug(s"Found $goalTuple in EDB")
       return GoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
     }
     // Otherwise, a rule must have derived it:
-    val ruleFirings = findRuleFirings(program, model, goalTuple)
+    val ruleFirings = findRuleFirings(goalTuple)
     assert (!ruleFirings.isEmpty, s"Couldn't find rules to derive tuple $goalTuple")
     logger.debug(s"Rule firings: $ruleFirings")
     val ruleNodes = ruleFirings.map { case (provRuleName, provTableRow) =>
@@ -133,7 +143,7 @@ object ProvenanceReader extends Logging {
       val notinTuples = provRule.bodyPredicates.filter(_.notin).map(substituteBindings)
       for (tuple <- notinTuples) {
         val matchingTuples = model.tables(tuple.table).filter(matchesPattern(tuple.cols))
-        val ruleFirings = findRuleFirings(program, model, tuple)
+        val ruleFirings = findRuleFirings(tuple)
         val internallyConsistent = matchingTuples.isEmpty == ruleFirings.isEmpty
         assert(internallyConsistent, "sTuple $tuple found without derivation (or vice-versa)")
         assert(matchingTuples.isEmpty, s"Found tuple ${matchingTuples(0)} that appears in a notin")
@@ -142,12 +152,12 @@ object ProvenanceReader extends Logging {
       }
       // Recursively compute the provenance of the new goals:
       RuleNode(nextRuleNodeId.getAndIncrement,
-        provRule, newGoalTuples.map(buildRGG(program, model)).toSet)
+        provRule, newGoalTuples.map(getDerivationTree).toSet)
     }
     GoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes)
   }
 
-  private def findRuleFirings(program: Program, model: UltimateModel, goalTuple: GoalTuple) = {
+  private def findRuleFirings(goalTuple: GoalTuple) = {
     // Find provenance tables that might explain how we derived `goalTuple`:
     val provTables = program.tables.map(_.name).filter(_.matches(s"^${goalTuple.table}_prov\\d+"))
     logger.debug(s"Table '${goalTuple.table}' has provenance tables $provTables")
@@ -156,9 +166,7 @@ object ProvenanceReader extends Logging {
       .filter(_._2.isDefined).map(x => (x._1, x._2.get))
   }
 
-  val WILDCARD = "__WILDCARD__"
-
-  private def isInEDB(program: Program, goalTuple: GoalTuple): Boolean = {
+  private def isInEDB(goalTuple: GoalTuple): Boolean = {
     val goalEDB = program.facts.filter(_.tableName == goalTuple.table)
     for (fact <- goalEDB) {
       val list = fact.cols.map {
