@@ -49,6 +49,8 @@
 var runs = [];
 var selectedRun = null;
 d3.json("runs.json", function(error, json) {
+    var tableDumps = d3.select("#table-dumps");
+
     var runsTable = d3.select("#runs-table").append("table").attr("class", "table table-condensed");
     thead = runsTable.append("thead").append("tr");
     tbody = runsTable.append("tbody");
@@ -66,11 +68,29 @@ d3.json("runs.json", function(error, json) {
         }
     });
 
-    var tableDumps = d3.select("#table-dumps");
+    var refreshRunsTable = function() {
+        var tr = tbody.selectAll("tr")
+                .data(runs)
+                .enter().append("tr")
+                .on("click", function () {
+                    if (selectedRun !== null)
+                        d3.select(selectedRun).classed("active", false);
+                    d3.select(this).classed("active", true);
+                    selectedRun = this;
+                    displaySelectedRun(d3.select(this).data()[0]);
+                });
 
-    json.forEach(function (run) {
-        runs.push(run);
-    });
+        var td = tr.selectAll("td")
+                .data(function (run) {
+                    return [
+                        run.iteration,
+                        formatStatus(run.status),
+                        run.failureSpec.crashes.map(formatCrash).join(", "),
+                        run.failureSpec.omissions.map(formatMessageLoss).join(", ")];
+                })
+                .enter().append("td")
+                .html(function (d) { return d; });
+    };
 
     var formatCrash = function(crash) {
         return crash.node + "@" + crash.time;
@@ -98,42 +118,30 @@ d3.json("runs.json", function(error, json) {
         tableDivs.selectAll("h3")
                 .data(function(t) { return [t]; })
                 .enter().append("h3").text(function (t) { return t.key; });
-        var tables = tableDivs.selectAll("table tbody")
+        var tables = tableDivs.selectAll("table")
                 .data(function(t) { return [t]; })
-                .enter().append("table").attr("class", "table table-condensed table-bordered")
-                .append("tbody");
-        var rows = tables.selectAll("tr").data(function (t) {
-                if (t.value.length == 0) return t.value;
-                var last = t.value[0].length - 1;
-                return t.value.sort(function(a, b) {return d3.ascending(parseInt(a[last]), parseInt(b[last])); });
-            })
+                .enter().append("table").attr("class", "table table-condensed table-bordered");
+        var tBodies = tables.selectAll("tbody")
+                .data(function (t) {
+                    return d3.nest().key(function(d) {
+                        return parseInt(d[d.length - 1]);
+                    })
+                    .sortKeys(function(x, y) { return d3.ascending(parseInt(x), parseInt(y));})
+                    .entries(t.value);
+                })
+                .enter().append("tbody");
+        var rows = tBodies.selectAll("tr").data(function (t) {
+                    return t.values.sort(d3.ascending);
+                })
                 .enter().append("tr");
         var cols = rows.selectAll("td").data(function(d) { return d; })
                 .enter().append("td")
                 .text(function(d) { return d; });
     };
 
-    var tr = tbody.selectAll("tr")
-            .data(runs)
-            .enter().append("tr")
-            .on("click", function () {
-                if (selectedRun !== null)
-                    d3.select(selectedRun).classed("active", false);
-                d3.select(this).classed("active", true);
-                selectedRun = this;
-                displaySelectedRun(d3.select(this).data()[0]);
-            });
 
-    var td = tr.selectAll("td")
-            .data(function (run) {
-                return [
-                    run.iteration,
-                    formatStatus(run.status),
-                    run.failureSpec.crashes.map(formatCrash).join(", "),
-                    run.failureSpec.omissions.map(formatMessageLoss).join(", ")];
-            })
-            .enter().append("td")
-            .html(function (d) { return d; });
+    json.forEach(function (run) {  runs.push(run); });
+    refreshRunsTable();
 });
 </script>
 </body>
