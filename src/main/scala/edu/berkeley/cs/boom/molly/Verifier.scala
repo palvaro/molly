@@ -6,6 +6,7 @@ import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.derivations.{Message, SATSolver, ProvenanceReader}
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.cs.boom.molly.derivations.SATSolver.SATVariable
+import scala.collection.mutable
 
 case class RunStatus(underlying: String) extends AnyVal
 case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, model: UltimateModel,
@@ -16,6 +17,7 @@ class Verifier(failureSpec: FailureSpec, program: Program) extends Logging {
   private val failureFreeSpec = failureSpec.copy(eff = 0, maxCrashes = 0)
   private val failureFreeProgram = DedalusTyper.inferTypes(failureFreeSpec.addClockFacts(program))
   private val runId = new AtomicInteger(0)
+  private val runCache = new mutable.HashMap[FailureSpec, Traversable[Run]]()
 
   /**
    * The ultimate model of a failure-free execution, used to bootstrap the verification.
@@ -37,12 +39,16 @@ class Verifier(failureSpec: FailureSpec, program: Program) extends Logging {
     if (satModels.isEmpty) {
       List(Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, messages))
     } else {
-      satModels.flatMap(doVerify)
+      satModels.flatMap(getOrComputeRuns)
     }
   }
 
   private def isGood(model: UltimateModel): Boolean = {
     model.tableAtTime("good", failureSpec.eot).toSet == failureFreeGood
+  }
+
+  private def getOrComputeRuns(failureSpec: FailureSpec): Traversable[Run] = {
+    runCache.getOrElseUpdate(failureSpec, doVerify(failureSpec))
   }
 
   private def doVerify(failureSpec: FailureSpec): Traversable[Run] = {
@@ -58,7 +64,7 @@ class Verifier(failureSpec: FailureSpec, program: Program) extends Logging {
       val provenance = provenanceReader.getDerivationTreesForTable("good")
       val seed: Set[SATVariable] = failureSpec.crashes ++ failureSpec.omissions
       val satModels = SATSolver.solve(failureSpec, provenance, messages, seed) -- Set(failureSpec)
-      val counterexamples = satModels.flatMap(doVerify).filter(r => r.status == RunStatus("failure"))
+      val counterexamples = satModels.flatMap(getOrComputeRuns).filter(r => r.status == RunStatus("failure"))
       if (counterexamples.isEmpty) {
         List(Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model, messages))
       } else {

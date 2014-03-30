@@ -37,7 +37,16 @@ object SATSolver extends Logging {
     logger.info(s"Minimal models are: \n${minimalModels.map(_.toString()).mkString("\n")}")
     minimalModels.flatMap { vars =>
       val crashes = vars.collect { case cf: CrashFailure => cf }
-      val omissions = vars.collect { case ml: MessageLoss => ml }
+      // If the seed contained a message loss, then it's possible that the SAT solver found
+      // a solution where that message's sender crashes before that message loss.
+      // Such message losses are redundant, so we'll remove them:
+      def subsumedByCrash(ml: MessageLoss) =
+        crashes.collectFirst {
+          case cf @ CrashFailure(ml.from, t) if t <= ml.time => cf
+          case cf @ CrashFailure(ml.to, t) if t + 1 >= ml.time => cf
+        }.isDefined
+      val omissions =
+        vars.collect { case ml @ MessageLoss(from, to, time) => ml }.filterNot(subsumedByCrash)
       if (crashes.isEmpty && omissions.isEmpty) {
         None
       } else {
