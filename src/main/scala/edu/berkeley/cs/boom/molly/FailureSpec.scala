@@ -26,20 +26,20 @@ case class FailureSpec(
   }
 
   def generateClockFacts: Seq[Predicate] = {
-    val facts = for (
+    val temporalFacts = for (
       from <- nodes;
       to <- nodes;
       t <- 1 to eot
+      if !crashes.exists(c => c.node == from && c.time <= t)  // if the sender didn't crash
     ) yield {
-      val senderCrashed = crashes.exists(c => c.node == from && c.time <= t)
       val messageLost = omissions.exists(o => o.from == from && o.to == to && o.time == t)
       val deliveryTime = if (from != to && messageLost) NEVER else t + 1
-      val isLocalDeductiveStep = from == to  // To allow vacuous good() rules to fire
-      if (isLocalDeductiveStep || !senderCrashed)
-        Some(Predicate("clock", List(StringLiteral(from), StringLiteral(to), IntLiteral(t), IntLiteral(deliveryTime)), notin = false, None))
-      else None
+      Predicate("clock", List(StringLiteral(from), StringLiteral(to), IntLiteral(t), IntLiteral(deliveryTime)), notin = false, None)
     }
-    facts.flatten
+    val localDeductiveFacts = for (node <- nodes; t <- 1 to eot) yield {
+      Predicate("clock", List(StringLiteral(node), StringLiteral(node), IntLiteral(t), IntLiteral(t)), notin = false, None)
+    }
+    localDeductiveFacts ++ temporalFacts
   }
 
   def addClockFacts(program: Program): Program = {
