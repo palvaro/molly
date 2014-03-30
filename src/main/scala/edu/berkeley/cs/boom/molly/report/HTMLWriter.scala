@@ -7,6 +7,7 @@ import argonaut._, Argonaut._
 import org.apache.commons.io.FileUtils
 import scala.collection.JavaConversions._
 import scala.sys.process._
+import org.apache.commons.io.filefilter.{FalseFileFilter, TrueFileFilter}
 
 
 object HTMLWriter {
@@ -15,8 +16,11 @@ object HTMLWriter {
     new File(HTMLWriter.getClass.getClassLoader.getResource("vis_template").getPath)
 
   def copyTemplateFiles(outputDirectory: File) {
-    FileUtils.iterateFiles(templateDir, null, false).foreach { file =>
-      FileUtils.copyFileToDirectory(file, outputDirectory)
+    FileUtils.iterateFilesAndDirs(templateDir, FalseFileFilter.INSTANCE, TrueFileFilter.INSTANCE).foreach {
+      dir => FileUtils.copyDirectoryToDirectory(dir, outputDirectory)
+    }
+    FileUtils.iterateFiles(templateDir, null, false).foreach {
+      file => FileUtils.copyFileToDirectory(file, outputDirectory)
     }
   }
 

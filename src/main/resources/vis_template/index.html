@@ -3,10 +3,34 @@
 <meta charset="utf-8">
 <head>
     <title>SyncFT Results</title>
-    <script src="d3.min.js"></script>
-    <script src="jquery.min.js"></script>
-    <script src="bootstrap.min.js"></script>
-    <link rel="stylesheet" href="bootstrap.min.css">
+    <script src="vendor/d3.min.js"></script>
+    <script src="vendor/jquery.min.js"></script>
+    <script src="vendor/jquery.floatThead.min.js"></script>
+    <script src="vendor/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="vendor/bootstrap.min.css">
+    <style type="text/css">
+        /* Always display the scrollbar in webkit so that it's obvious
+        that there are more entries to scroll to; see http://davidwalsh.name/osx-overflow */
+        #runs-table::-webkit-scrollbar {
+            -webkit-appearance: none;
+            width: 7px;
+        }
+        #runs-table::-webkit-scrollbar-thumb {
+            border-radius: 4px;
+            background-color: rgba(0, 0, 0, .5);
+            -webkit-box-shadow: 0 0 1px rgba(255, 255, 255, .5);
+        }
+        table.floatThead-table {
+            border-top: none;
+            border-bottom: none;
+            background-color: #FFF;
+        }
+        #runs-table {
+            height: 240px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+    </style>
 </head>
 <body>
 
@@ -25,15 +49,22 @@
 var runs = [];
 var selectedRun = null;
 d3.json("runs.json", function(error, json) {
-
     var runsTable = d3.select("#runs-table").append("table").attr("class", "table table-condensed");
-    thead = runsTable.append("thead");
+    thead = runsTable.append("thead").append("tr");
     tbody = runsTable.append("tbody");
 
     thead.append("th").text("Iteration");
     thead.append("th").text("Status");
     thead.append("th").text("Crashes");
     thead.append("th").text("Message losses");
+
+
+    $('#runs-table').find('table').floatThead({
+        useAbsolutePositioning: true,
+        scrollContainer: function($table){
+            return $table.closest("#runs-table");
+        }
+    });
 
     var tableDumps = d3.select("#table-dumps");
 
@@ -47,6 +78,14 @@ d3.json("runs.json", function(error, json) {
 
     var formatMessageLoss = function(loss) {
         return loss.from + " ==> " + loss.to + " @ " + loss.time;
+    };
+
+    var formatStatus = function(status) {
+        if (status == "success") {
+            return '<span class="glyphicon glyphicon-ok text-success"> success</span>'
+        } else {
+            return '<span class="glyphicon glyphicon-remove text-danger"> failure</span>'
+        }
     };
 
     var displaySelectedRun = function(newRun) {
@@ -89,12 +128,12 @@ d3.json("runs.json", function(error, json) {
             .data(function (run) {
                 return [
                     run.iteration,
-                    run.status,
+                    formatStatus(run.status),
                     run.failureSpec.crashes.map(formatCrash).join(", "),
                     run.failureSpec.omissions.map(formatMessageLoss).join(", ")];
             })
             .enter().append("td")
-            .text(function (d) { return d; });
+            .html(function (d) { return d; });
 });
 </script>
 </body>
