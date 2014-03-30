@@ -33,7 +33,7 @@ class Verifier(failureSpec: FailureSpec, program: Program) extends Logging {
       new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel)
     val messages = provenanceReader.getMessages
     val provenance = provenanceReader.getDerivationTreesForTable("good")
-    val satModels = SATSolver.solve(failureSpec, provenance)
+    val satModels = SATSolver.solve(failureSpec, provenance, messages)
     if (satModels.isEmpty) {
       List(Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, messages))
     } else {
@@ -57,7 +57,7 @@ class Verifier(failureSpec: FailureSpec, program: Program) extends Logging {
       // that omissions on those new channels don't produce counterexamples:
       val provenance = provenanceReader.getDerivationTreesForTable("good")
       val seed: Set[SATVariable] = failureSpec.crashes ++ failureSpec.omissions
-      val satModels = SATSolver.solve(failureSpec, provenance, seed) -- Set(failureSpec)
+      val satModels = SATSolver.solve(failureSpec, provenance, messages, seed) -- Set(failureSpec)
       val counterexamples = satModels.flatMap(doVerify).filter(r => r.status == RunStatus("failure"))
       if (counterexamples.isEmpty) {
         List(Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model, messages))

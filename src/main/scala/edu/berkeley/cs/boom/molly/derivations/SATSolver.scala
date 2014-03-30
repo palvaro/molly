@@ -21,13 +21,16 @@ object SATSolver extends Logging {
   /**
    * @param failureSpec a description of failures.
    * @param goals a list of goals whose derivations we'll attempt to falsify
+   * @param messages a list of messages sent during the program's execution
    * @param seed a set of message failures and crashes that we already know have occurred,
    *             e.g. from previous runs.
    * @return all solutions to the SAT problem, formulated as failure specifications
    */
-  def solve(failureSpec: FailureSpec, goals: List[GoalNode], seed: Set[SATVariable] = Set.empty):
+  def solve(failureSpec: FailureSpec, goals: List[GoalNode], messages: Seq[Message], seed: Set[SATVariable] = Set.empty):
     Set[FailureSpec] = {
-    val models = goals.flatMap { goal => solve(failureSpec, goal, seed) }.toSet
+    val firstMessageSendTimes =
+      messages.groupBy(_.from).mapValues(_.minBy(_.sendTime).sendTime)
+    val models = goals.flatMap { goal => solve(failureSpec, goal, firstMessageSendTimes, seed) }.toSet
     logger.info(s"SAT problem has ${models.size} solutions:\n${models.map(_.toString()).mkString("\n")}")
     def isSubset[T](set: Set[T], superset: Set[T]): Boolean = set.forall(e => superset.contains(e))
     val minimalModels = models.filterNot { m => models.exists(m2 => m != m2 && isSubset(m2, m) )}
@@ -43,7 +46,8 @@ object SATSolver extends Logging {
     }
   }
 
-  private def solve(failureSpec: FailureSpec, goal: GoalNode, seed: Set[SATVariable]):
+  private def solve(failureSpec: FailureSpec, goal: GoalNode,
+                    firstMessageSendTimes: Map[String, Int], seed: Set[SATVariable]):
     Traversable[Set[SATVariable]] = {
     val solver = SolverFactory.newLight()
 
@@ -71,13 +75,20 @@ object SATSolver extends Logging {
     } else {
       logger.debug(s"Goal ${goal.tuple} has important nodes $importantNodes")
     }
+    // Add constraints to ensure that each node crashes at a single time, or never crashes:
     for (node <- importantNodes) {
-      // Create one variable for every time at which the node could crash:
-      val crashVars = (1 to failureSpec.eff - 1).map(t => CrashFailure(node, t))
+      // There's no point in considering crashes before the first time that a node sends a message,
+      // since all such scenarios will be equivalent to crashing when sending the first message:
+      val firstSendTime = firstMessageSendTimes.getOrElse(node, 1)
+      // Create one variable for every time at which the node could crash
+      val crashVars = (firstSendTime to failureSpec.eff - 1).map(t => CrashFailure(node, t))
+      // Include any crashes specified in the seed, since they might be excluded by the
+      // "no crashes before the first message was sent" constraint:
+      val seedCrashes = seed.collect { case c: CrashFailure => c }
       // An extra variable for scenarios where the node didn't crash:
       val neverCrashed = NeverCrashed(node)
       // Each node crashes at a single time, or never crashes:
-      solver.addExactly(crashVars ++ Seq(neverCrashed), 1)
+      solver.addExactly((crashVars ++ seedCrashes).toSet ++ Seq(neverCrashed), 1)
     }
     // If there are at most C crashes, then at least (N - C) nodes never crash:
     solver.addAtLeast(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.maxCrashes)
@@ -95,7 +106,8 @@ object SATSolver extends Logging {
       // sender having crashed at an earlier timestamp:
       val messageLosses = failures.map(MessageLoss.tupled)
       val crashes = messageLosses.flatMap { loss =>
-        val crashTimes = 1 to loss.time
+        val firstSendTime = firstMessageSendTimes.getOrElse(loss.from, 1)
+        val crashTimes = firstSendTime to loss.time
         crashTimes.map ( t => CrashFailure(loss.from, t))
       }
       solver.addClause(messageLosses ++ crashes)
