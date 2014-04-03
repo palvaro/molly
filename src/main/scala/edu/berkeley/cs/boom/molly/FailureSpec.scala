@@ -37,7 +37,7 @@ case class FailureSpec(
       Predicate("clock", List(StringLiteral(from), StringLiteral(to), IntLiteral(t), IntLiteral(deliveryTime)), notin = false, None)
     }
     val localDeductiveFacts = for (node <- nodes; t <- 1 to eot) yield {
-      Predicate("clock", List(StringLiteral(node), StringLiteral(node), IntLiteral(t), IntLiteral(t)), notin = false, None)
+      Predicate("clock", List(StringLiteral(node), StringLiteral(node), IntLiteral(t), IntLiteral(t + 1)), notin = false, None)
     }
     localDeductiveFacts ++ temporalFacts
   }
