@@ -5,14 +5,28 @@ import edu.berkeley.cs.boom.molly.ast.StringLiteral
 import edu.berkeley.cs.boom.molly.ast.Expr
 import edu.berkeley.cs.boom.molly.ast.Aggregate
 import edu.berkeley.cs.boom.molly.ast.Program
-import scala.collection.immutable
+import org.jgrapht.alg.util.UnionFind
+import scala.collection.JavaConverters._
 
 object DedalusTyper {
 
   private type Type = String
+  private type ColRef = (String, Int)  // (tableName, columnNumber) pairs
   private val INT: Type = "int"
   private val STRING: Type = "string"
   private val UNKNOWN: Type = "unknown"
+
+  private def inferTypeOfAtom(atom: Atom): Type = {
+    atom match {
+      case Identifier("MRESERVED") => INT
+      case Identifier("NRESERVED") => INT
+      case StringLiteral(_) => STRING
+      case IntLiteral(_) => INT
+      case a: Aggregate => INT
+      case e: Expr => INT
+      case _ => UNKNOWN
+    }
+  }
 
   /**
    * Infers the types of predicate columns.
@@ -24,83 +38,68 @@ object DedalusTyper {
    */
   def inferTypes(program: Program): Program = {
     require (program.tables.isEmpty, "Program is already typed!")
-    // We can type string and int literals; other types need to be inferred
-    // based on variable bindings.
     val allPredicates = program.facts ++ program.rules.map(_.head) ++
       program.rules.flatMap(_.bodyPredicates)
-    val typeGuesses: Map[String, List[List[Type]]] =
-      allPredicates.map { pred =>
-        val colGuesses = pred.cols.map {
-          case Identifier("MRESERVED") => INT
-          case Identifier("NRESERVED") => INT
-          case StringLiteral(_) => STRING
-          case IntLiteral(_) => INT
-          case a: Aggregate => INT
-          case e: Expr => INT
-          case _ => UNKNOWN
-        }
-        (pred.tableName, colGuesses)
-      }.groupBy(_._1).mapValues(_.map(_._2))
+    val allColRefs = for (
+      pred <- allPredicates;
+      (col, colNum) <- pred.cols.zipWithIndex
+    ) yield (pred.tableName, colNum)
 
-    // As a sanity check, ensure that all occurrences of the predicate have the
-    // same number of columns.
-    for ((table, guesses) <- typeGuesses) {
-      assert(guesses.map(_.length).toSet.size == 1,
-        s"Predicate $table used with inconsistent number of columns")
+    // Determine (maximal) sets of columns that must have the same type:
+    val colRefToMinColRef = new UnionFind[ColRef](allColRefs.toSet.asJava)
+
+    // Find multiple occurrences of variable in rules; these columns must have the same type:
+    for (
+      rule <- program.rules;
+      sameTypedCols <- rule.variablesWithIndexes.groupBy(_._1).values.map(x => x.map(_._2));
+      firstColRef = sameTypedCols.head;
+      colRef <- sameTypedCols
+    ) {
+      colRefToMinColRef.union(colRef, firstColRef)
     }
 
-    def dom(a: Type, b: Type): Type = {
-      if (a != UNKNOWN) a
-      else b
-    }
-    val knownTypes: Map[String, Array[String]] = {
-      val m = typeGuesses.mapValues {
-        _.reduce((x, y) => x.zip(y).map(p => dom(p._1, p._2))).toArray
-      }.toSeq
-      immutable.Map(m: _*)    // Workaround for a Scala bug :(
+    // Accumulate all type evidence:
+    val typeEvidence: Map[ColRef, Set[Type]] = {
+      val inferredFromPredicates = for (
+        pred <- allPredicates;
+        (col, colNum) <- pred.cols.zipWithIndex;
+        inferredType = inferTypeOfAtom(col)
+        if inferredType != UNKNOWN
+      ) yield (colRefToMinColRef.find((pred.tableName, colNum)), inferredType)
+      val inferredFromQuals = for (
+        rule <- program.rules;
+        expressionVars = rule.bodyQuals.flatMap(_.variables);
+        (col, colNum) <- rule.head.cols.zipWithIndex
+        if col.isInstanceOf[Identifier]
+        if expressionVars.contains(col.asInstanceOf[Identifier])
+      ) yield (colRefToMinColRef.find((rule.head.tableName, colNum)), INT)
+      val evidence = inferredFromPredicates ++ inferredFromQuals
+      evidence.groupBy(_._1).mapValues(_.map(_._2).toSet)
     }
 
-    // Any variable that appears in an expression in the rule body must be an int:
-    for (rule <- program.rules) {
-      val expressionVariables = rule.bodyQuals.flatMap(_.variables)
-      rule.head.cols.zipWithIndex.foreach { case (atom, colNum) =>
-        atom match {
-          case ident: Identifier =>
-            if (expressionVariables.contains(ident))
-              knownTypes(rule.head.tableName)(colNum) = INT
-          case _ =>
-         }
+    // Check that all occurrences of a given predicate have the same number of columns:
+    val numColsInTable = allPredicates.groupBy(_.tableName).mapValues { predicates =>
+      val colCounts = predicates.map(_.cols.size).toSet
+      assert(colCounts.size == 1,
+        s"Predicate ${predicates.head.tableName} used with inconsistent number of columns")
+      colCounts.head
+    }
+
+    // Assign types to each group of columns:
+    val tableNames = allPredicates.map(_.tableName).toSet
+    val tables = tableNames.map { tableName =>
+      val numCols = numColsInTable(tableName)
+      val colTypes = (0 to numCols - 1).map { colNum =>
+        val representative = colRefToMinColRef.find((tableName, colNum))
+        val types = typeEvidence.getOrElse(representative,
+          throw new Exception(
+            s"No evidence for type of column ${representative._2} of ${representative._1}"))
+        assert(types.size == 1,
+          s"Conflicting evidence for type of column $colNum of $tableName: $types")
+        types.head
       }
+      Table(tableName, colTypes.toList)
     }
-
-    var updatedBindings = true
-    // Iteratively fill in the missing types by find columns that should have the same type:
-    while (updatedBindings) {
-      updatedBindings = false
-      for (rule <- program.rules) {
-        val equivalenceClasses = rule.variablesWithIndexes.groupBy(_._1).values
-        equivalenceClasses.foreach { vars =>
-          val typeBindings = vars.map {
-            case (_, (tableName, colNum)) => knownTypes(tableName)(colNum)
-          }
-          val candidateTypes = typeBindings.filter(_ != UNKNOWN).toSet
-          assert(candidateTypes.size <= 1, "Could not uniquely determine type for vars " + vars)
-          if (candidateTypes.size == 1 && typeBindings.contains(UNKNOWN)) {
-            // Propagate the binding
-            val finalType = candidateTypes.toSeq(0)
-            vars.foreach {
-              case (_, (tableName, colNum)) =>
-                knownTypes(tableName)(colNum) = finalType
-            }
-            updatedBindings = true
-          }
-        }
-      }
-    }
-
-    assert (!knownTypes.values.flatten.toSeq.contains(UNKNOWN), "Failed to determine a col type")
-
-    val tables = knownTypes.toSeq.map(x => Table(x._1, x._2.toList)).toSet
     program.copy(tables = tables)
   }
 }

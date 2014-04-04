@@ -36,7 +36,8 @@ object MollyBuild extends Build {
         "com.github.jnr" % "jnr-ffi" % "1.0.10",
         "io.argonaut" %% "argonaut" % "6.0.3",
         "org.ow2.sat4j" % "org.ow2.sat4j.core" % "2.3.5",
-        "commons-io" % "commons-io" % "2.4"
+        "commons-io" % "commons-io" % "2.4",
+        "org.jgrapht" % "jgrapht-core" % "0.9.0"
       )
     )
   )

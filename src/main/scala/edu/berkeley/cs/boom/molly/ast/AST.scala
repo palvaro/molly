@@ -54,6 +54,9 @@ case class Predicate(tableName: String,
                      cols: List[Atom],
                      notin: Boolean,
                      time: Option[Time]) extends Clause {
+  /**
+   * Returns a list of (variableName, (tableName, colNumber)) tuples.
+   */
   def variablesWithIndexes: List[(String, (String, Int))] = {
     cols.zipWithIndex.flatMap { case (col, index) =>
       col match {
