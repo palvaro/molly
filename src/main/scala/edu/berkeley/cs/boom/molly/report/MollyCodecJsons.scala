@@ -18,8 +18,8 @@ object MollyCodecJsons {
     CodecJson.derived(StringEncodeJson.contramap((x: RunStatus) => x.underlying),
                       StringDecodeJson.map(RunStatus.apply))
 
-  implicit def RunCodecJson: CodecJson[Run] =
-    casecodec5(Run.apply, Run.unapply)("iteration", "status", "failureSpec", "model", "messages")
+  implicit def RunCodecJson: EncodeJson[Run] =
+    jencode4L((run: Run) => (run.iteration, run.status, run.failureSpec, run.model))("iteration", "status", "failureSpec", "model")
 
   implicit def FailureSpecCodecJson: CodecJson[FailureSpec] =
     casecodec6(FailureSpec.apply, FailureSpec.unapply)("eot", "eff", "maxCrashes", "nodes",

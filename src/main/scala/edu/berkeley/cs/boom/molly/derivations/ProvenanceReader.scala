@@ -8,36 +8,11 @@ import edu.berkeley.cs.boom.molly.{FailureSpec, UltimateModel}
 import edu.berkeley.cs.boom.molly.ast.Identifier
 import scala.Some
 import edu.berkeley.cs.boom.molly.ast.Program
-import edu.berkeley.cs.boom.molly.report.GraphvizPrettyPrinter
 import java.util.concurrent.atomic.AtomicInteger
 import scalaz._
 import Scalaz._
 import scala.collection.mutable
 
-
-object RuleGoalGraphGraphvizGenerator extends GraphvizPrettyPrinter {
-  def toDot(goal: GoalNode): String = {
-    val dot = "digraph" <+> "dataflow" <+> braces(nest(
-      linebreak <>
-        dotStatements(goal).reduce(_ <@@> _)
-    ) <> linebreak)
-    super.pretty(dot)
-  }
-
-  private def dotStatements(goal: GoalNode): List[Doc] = {
-    val id = "goal" + goal.id
-    val nodes = List(node(id, "label" -> goal.tuple.toString))
-    val edges = goal.rules.map(rule => diEdge(id, "rule" + rule.id))
-    nodes ++ edges ++ goal.rules.flatMap(dotStatements)
-  }
-
-  private def dotStatements(rule: RuleNode): List[Doc] = {
-    val id = "rule" + rule.id
-    val nodes = List(node(id, "label" -> rule.rule.head.tableName, "shape" -> "square"))
-    val edges = rule.subgoals.map(goal => diEdge(id, "goal" + goal.id))
-    nodes ++ edges ++ rule.subgoals.flatMap(dotStatements)
-  }
-}
 
 case class GoalTuple(table: String, cols: List[String]) {
   override def toString: String = table + "(" + cols.mkString(", ") + ")"
