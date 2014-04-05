@@ -60,6 +60,14 @@ object DedalusTyper {
 
     // Accumulate all type evidence:
     val typeEvidence: Map[ColRef, Set[Type]] = {
+      // Some meta-EDB tables might be empty in certain runs (such as crash()), so we need to
+      // hard-code their type evidence:
+      val metaEDBTypes = Seq(
+        (colRefToMinColRef.find(("crash", 0)), STRING),
+        (colRefToMinColRef.find(("crash", 1)), STRING),
+        (colRefToMinColRef.find(("crash", 2)), INT),
+        (colRefToMinColRef.find(("crash", 3)), INT)
+      )
       val inferredFromPredicates = for (
         pred <- allPredicates;
         (col, colNum) <- pred.cols.zipWithIndex;
@@ -73,7 +81,7 @@ object DedalusTyper {
         if col.isInstanceOf[Identifier]
         if expressionVars.contains(col.asInstanceOf[Identifier])
       ) yield (colRefToMinColRef.find((rule.head.tableName, colNum)), INT)
-      val evidence = inferredFromPredicates ++ inferredFromQuals
+      val evidence = inferredFromPredicates ++ inferredFromQuals ++ metaEDBTypes
       evidence.groupBy(_._1).mapValues(_.map(_._2).toSet)
     }
 
