@@ -39,7 +39,10 @@ case class FailureSpec(
     val localDeductiveFacts = for (node <- nodes; t <- 1 to eot) yield {
       Predicate("clock", List(StringLiteral(node), StringLiteral(node), IntLiteral(t), IntLiteral(t + 1)), notin = false, None)
     }
-    localDeductiveFacts ++ temporalFacts
+    val crashFacts = for (crash <- crashes; node <- nodes; t <- 1 to eot) yield {
+      Predicate("crash", List(StringLiteral(node), StringLiteral(crash.node), IntLiteral(crash.time), IntLiteral(t)), notin = false, None)
+    }
+    localDeductiveFacts ++ temporalFacts ++ crashFacts
   }
 
   def addClockFacts(program: Program): Program = {
