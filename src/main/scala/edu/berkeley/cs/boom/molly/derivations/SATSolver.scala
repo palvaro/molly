@@ -76,7 +76,7 @@ object SATSolver extends Logging {
     // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
     // will be candidates for crashing:
     val importantNodes: Set[String] =
-      distinctGoalDerivations.flatMap(_.importantClocks).filter(_._3 < failureSpec.eff).map(_._1).toSet ++
+      distinctGoalDerivations.flatMap(_.importantClocks).filter(_._3 < failureSpec.eot).map(_._1).toSet ++
       seed.collect { case cf: CrashFailure => cf.node }
     if (importantNodes.isEmpty) {
       logger.debug(s"Goal ${goal.tuple} has no important nodes; skipping SAT solver")
@@ -90,7 +90,7 @@ object SATSolver extends Logging {
       // since all such scenarios will be equivalent to crashing when sending the first message:
       val firstSendTime = firstMessageSendTimes.getOrElse(node, 1)
       // Create one variable for every time at which the node could crash
-      val crashVars = (firstSendTime to failureSpec.eff - 1).map(t => CrashFailure(node, t))
+      val crashVars = (firstSendTime to failureSpec.eot - 1).map(t => CrashFailure(node, t))
       // Include any crashes specified in the seed, since they might be excluded by the
       // "no crashes before the first message was sent" constraint:
       val seedCrashes = seed.collect { case c: CrashFailure => c }
