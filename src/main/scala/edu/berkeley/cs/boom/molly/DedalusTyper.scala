@@ -40,10 +40,17 @@ object DedalusTyper {
     require (program.tables.isEmpty, "Program is already typed!")
     val allPredicates = program.facts ++ program.rules.map(_.head) ++
       program.rules.flatMap(_.bodyPredicates)
-    val allColRefs = for (
+    val mostColRefs = for (
       pred <- allPredicates;
       (col, colNum) <- pred.cols.zipWithIndex
-    ) yield (pred.tableName, colNum)
+    ) yield (pred.tableName, colNum) 
+
+    val allColRefs = mostColRefs ++ Seq(
+      ("crash", 0),
+      ("crash", 1),
+      ("crash", 2),
+      ("crash", 3)
+    )
 
     // Determine (maximal) sets of columns that must have the same type:
     val colRefToMinColRef = new UnionFind[ColRef](allColRefs.toSet.asJava)
