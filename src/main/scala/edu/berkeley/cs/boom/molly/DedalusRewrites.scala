@@ -68,33 +68,20 @@ object DedalusRewrites {
    * Add rules and rewrite rule bodies to record provenance.
    */
   def addProvenanceRules(program: Program): Program = {
-    // Generate provenance rules
     val provenanceRules = program.rules.zipWithIndex.map { case (rule, number) =>
-      // Rename the rule head and modify it to record all variable bindings.
+      // Rename the rule head and modify it to record variable bindings.
       // We also record the values of variables that appear in expressions in order to
       // avoid the need to invert those expressions to recover the variable bindings
       // inside the ProvenanceReader.
-      val headExprVars = rule.head.cols.collect { case e: Expr => e }
-        .flatMap(_.variables).map(_.name)
-      val allVariables = rule.variablesWithIndexes.map(_._1).toSet ++
-        rule.bodyQuals.flatMap(_.variables).map(_.name) ++ headExprVars
-      val newVariables = allVariables -- rule.head.variablesWithIndexes.map(_._1).toSet
+      val newVariables =
+        (rule.head.variablesInExpressions ++ rule.boundVariables) -- rule.head.variables
       // Produce a new head, preserving the last time column:
       val newHead = rule.head.copy(tableName = rule.head.tableName + "_prov" + number,
         cols = rule.head.cols.take(rule.head.cols.size - 1) ++
           newVariables.map(Identifier).filter(_ != dc) ++ List(rule.head.cols.last))
       rule.copy(head = newHead)
     }
-    // Rewrite the program's rule bodies to reference the provenance rules
-    val rewrittenRules = program.rules.zip(provenanceRules).map { case (rule, provRule) =>
-      // Create fresh variable names for use in this rule:
-      val headVars = (1 to rule.head.cols.size - 1).map(n => Identifier(s"X$n")).toList
-      val head = rule.head.copy(time = None, cols = headVars :+ nreserved)
-      val placeholders = List.fill(provRule.head.cols.size - rule.head.cols.size)(dc)
-      val body = provRule.head.copy(cols = headVars ++ placeholders :+ nreserved)
-      Rule(head, List(Left(body)))
-    }
-    program.copy(rules = rewrittenRules ++ provenanceRules)
+    program.copy(rules = program.rules ++ provenanceRules)
   }
 
 }

@@ -87,9 +87,11 @@ class ProvenanceReader(program: Program,
   }
 
   def getMessages: List[Message] = {
-    val asyncRules = program.rules.filter(_.head.time == Some(Async()))
-    logger.debug(s"Async rules are ${asyncRules.map(_.head.tableName)}")
     val tableNamePattern = """^(.*)_prov\d+$""".r
+    def isProvRule(rule: Rule): Boolean =
+      tableNamePattern.findFirstMatchIn(rule.head.tableName).isDefined
+    val asyncRules = program.rules.filter(isProvRule).filter(_.head.time == Some(Async()))
+    logger.debug(s"Async rules are ${asyncRules.map(_.head.tableName)}")
     asyncRules.flatMap { rule =>
       val clockPred = rule.bodyPredicates.filter(_.tableName == "clock")(0)
       val fromIdent = clockPred.cols(0).asInstanceOf[Identifier].name
@@ -128,7 +130,7 @@ class ProvenanceReader(program: Program,
         val goalCols = pred.cols.map {
           case StringLiteral(s) => s
           case IntLiteral(i) => i.toString
-          case Identifier(ident) => bindings(ident)
+          case Identifier(ident) => bindings.getOrElse(ident, WILDCARD)
           case agg: Aggregate =>
             throw new NotImplementedError("Don't know how to substitute for aggregate")
           case expr: Expr =>
@@ -136,7 +138,22 @@ class ProvenanceReader(program: Program,
         }
         GoalTuple(pred.tableName, goalCols)
       }
-      val newGoalTuples = provRule.bodyPredicates.filterNot(_.notin).map(substituteBindings)
+      val bodyGoalTuples = provRule.bodyPredicates.filterNot(_.notin).map(substituteBindings)
+      // If this query contains aggregates, then we need to add goals for any tuples that
+      // contributed to those aggregates:
+      val time = bindings("NRESERVED").toInt
+      val aggGoalTuples = provRule.head.variablesInAggregates.flatMap { aggVar =>
+        val aggPreds =
+          provRule.bodyPredicates.filter(_.variables.contains(aggVar)).map(substituteBindings)
+        aggPreds.flatMap { pred =>
+          val tuples = model.tableAtTime(pred.table, time)
+          val matchingTuples = tuples.filter(matchesPattern(pred.cols))
+          matchingTuples.map(t => GoalTuple(pred.table, t))
+        }
+      }
+
+      val newGoalTuples = aggGoalTuples ++ bodyGoalTuples
+
       logger.debug(s"New subgoal tuples are $newGoalTuples")
       // As a sanity check, make sure that negated tuples don't appear in their respective tables
       // or any provenance tables:
@@ -167,19 +184,15 @@ class ProvenanceReader(program: Program,
   }
 
   private def isInEDB(goalTuple: GoalTuple): Boolean = {
-    val goalEDB = program.facts.filter(_.tableName == goalTuple.table)
-    for (fact <- goalEDB) {
+    program.facts.filter(_.tableName == goalTuple.table).exists { fact =>
       val list = fact.cols.map {
         case IntLiteral(i) => i.toString
         case StringLiteral(s) => s
         case v => throw new IllegalStateException(
           s"Facts shouldn't contain aggregates, expressions, or variables, but found $v")
       }
-      if (matchesPattern(goalTuple.cols)(list)) {
-        return true
-      }
+      matchesPattern(goalTuple.cols)(list)
     }
-    false
   }
 
   /**
