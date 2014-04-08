@@ -8,10 +8,12 @@ import edu.berkeley.cs.boom.molly.wrappers.C4Wrapper
 import edu.berkeley.cs.boom.molly.derivations.{GoalNode, GoalTuple, ProvenanceReader}
 import edu.berkeley.cs.boom.molly.derivations.ProvenanceReader._
 import scalaz._, Scalaz._
+import com.codahale.metrics.MetricRegistry
 
 
 class ProvenanceSuite extends FunSuite with Matchers {
   test("Aggregate provenance is computed correctly") {
+    implicit val metricRegistry = new MetricRegistry()
     val src =
       """
         | fact("loc", "A", 100)@1;

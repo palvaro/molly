@@ -9,6 +9,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import org.sat4j.tools.ModelIterator
 import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
+import com.codahale.metrics.MetricRegistry
+import nl.grons.metrics.scala.MetricBuilder
 
 object SATSolver extends Logging {
   sealed trait SATVariable
@@ -26,8 +28,10 @@ object SATSolver extends Logging {
    *             e.g. from previous runs.
    * @return all solutions to the SAT problem, formulated as failure specifications
    */
-  def solve(failureSpec: FailureSpec, goals: List[GoalNode], messages: Seq[Message], seed: Set[SATVariable] = Set.empty):
+  def solve(failureSpec: FailureSpec, goals: List[GoalNode], messages: Seq[Message],
+            seed: Set[SATVariable] = Set.empty)(implicit metricRegistry: MetricRegistry):
     Set[FailureSpec] = {
+    implicit val metrics = new MetricBuilder(getClass, metricRegistry)
     val firstMessageSendTimes =
       messages.groupBy(_.from).mapValues(_.minBy(_.sendTime).sendTime)
     val models = goals.flatMap { goal => solve(failureSpec, goal, firstMessageSendTimes, seed) }.toSet
@@ -56,7 +60,8 @@ object SATSolver extends Logging {
   }
 
   private def solve(failureSpec: FailureSpec, goal: GoalNode,
-                    firstMessageSendTimes: Map[String, Int], seed: Set[SATVariable]):
+                    firstMessageSendTimes: Map[String, Int], seed: Set[SATVariable])
+                   (implicit metrics: MetricBuilder):
     Traversable[Set[SATVariable]] = {
     val solver = SolverFactory.newLight()
 
@@ -125,13 +130,15 @@ object SATSolver extends Logging {
     // Assume any message losses that have already occurred:
     val assumptions = seed
 
-    val modelIterator = new ModelIterator(solver)
     val models = ArrayBuffer[Set[SATVariable]]()
-    while (modelIterator.isSatisfiable(assumptions)) {
-      val newModel = modelIterator.model().filter(_ > 0).map(idToSatVariable).toSet
-      // Exclude models where no failures or crashes occurred:
-      if (!newModel.filter(!_.isInstanceOf[NeverCrashed]).isEmpty) {
-        models += newModel
+    metrics.timer("sat4j-time").time {
+      val modelIterator = new ModelIterator(solver)
+      while (modelIterator.isSatisfiable(assumptions)) {
+        val newModel = modelIterator.model().filter(_ > 0).map(idToSatVariable).toSet
+        // Exclude models where no failures or crashes occurred:
+        if (!newModel.filter(!_.isInstanceOf[NeverCrashed]).isEmpty) {
+          models += newModel
+        }
       }
     }
     models

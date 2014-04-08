@@ -5,11 +5,16 @@ import edu.berkeley.cs.boom.molly.ast.{IntLiteral, Program}
 import jnr.ffi.LibraryLoader
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.codegen.C4CodeGenerator
+import nl.grons.metrics.scala.InstrumentedBuilder
+import com.codahale.metrics.MetricRegistry
 
 
-class C4Wrapper(name: String, program: Program) extends Logging {
+class C4Wrapper(name: String, program: Program)
+               (implicit val metricRegistry: MetricRegistry)  extends Logging with InstrumentedBuilder {
 
-  def run: UltimateModel = {
+  private val time = metrics.timer("time")
+
+  def run: UltimateModel = time.time {
     C4Wrapper.libC4.c4_initialize()
     val c4 = C4Wrapper.libC4.c4_make(null, 0)
     try {

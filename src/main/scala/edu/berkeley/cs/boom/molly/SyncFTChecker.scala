@@ -6,6 +6,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.ast.Program
 import edu.berkeley.cs.boom.molly.DedalusRewrites._
 import edu.berkeley.cs.boom.molly.report.HTMLWriter
+import com.codahale.metrics.{Slf4jReporter, ConsoleReporter, MetricRegistry}
+import java.util.concurrent.TimeUnit
 
 
 case class Config(
@@ -25,6 +27,13 @@ object SyncFTChecker extends Logging {
     opt[String]('N', "nodes") text "a comma-separated list of nodes (required)" required() action { (x, c) => c.copy(nodes = x.split(','))}
     arg[File]("<file>...") unbounded() minOccurs 1 text "Dedalus files" action { (x, c) => c.copy(inputPrograms = c.inputPrograms :+ x)}
   }
+
+  implicit val metrics: MetricRegistry = new MetricRegistry()
+  val metricsReporter = Slf4jReporter.forRegistry(metrics)
+    .outputTo(logger.underlying)
+    .convertRatesTo(TimeUnit.SECONDS)
+    .convertDurationsTo(TimeUnit.MILLISECONDS)
+    .build()
 
   private def processIncludes(program: Program, includeSearchPath: File): Program = {
     val includes = program.includes.map { include =>
@@ -56,6 +65,7 @@ object SyncFTChecker extends Logging {
   def main(args: Array[String]) {
     parser.parse(args, Config()) map { config =>
       val results = check(config)
+      metricsReporter.report()
       // TODO: name the output directory after the input filename and failure spec.
       HTMLWriter.write(new File("output"), Nil, results)
     } getOrElse {

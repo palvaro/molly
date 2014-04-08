@@ -7,12 +7,15 @@ import edu.berkeley.cs.boom.molly.derivations.{GoalNode, Message, SATSolver, Pro
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.cs.boom.molly.derivations.SATSolver.SATVariable
 import scala.collection.mutable
+import com.codahale.metrics.MetricRegistry
+import nl.grons.metrics.scala.InstrumentedBuilder
 
 case class RunStatus(underlying: String) extends AnyVal
 case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, model: UltimateModel,
                messages: List[Message], provenance: List[GoalNode])
 
-class Verifier(failureSpec: FailureSpec, program: Program) extends Logging {
+class Verifier(failureSpec: FailureSpec, program: Program)
+              (implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
 
   private val failureFreeSpec = failureSpec.copy(eff = 0, maxCrashes = 0)
   private val failureFreeProgram = DedalusTyper.inferTypes(failureFreeSpec.addClockFacts(program))

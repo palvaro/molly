@@ -12,6 +12,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import scalaz._
 import Scalaz._
 import scala.collection.mutable
+import nl.grons.metrics.scala.InstrumentedBuilder
+import com.codahale.metrics.MetricRegistry
 
 
 case class GoalTuple(table: String, cols: List[String]) {
@@ -72,14 +74,17 @@ object ProvenanceReader {
  */
 class ProvenanceReader(program: Program,
                        failureSpec: FailureSpec,
-                       model: UltimateModel) extends Logging {
+                       model: UltimateModel)
+                      (implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
   import ProvenanceReader._
   private val nextRuleNodeId = new AtomicInteger(0)
   private val nextGoalNodeId = new AtomicInteger(0)
   private val derivationTreeCache = new mutable.HashMap[GoalTuple, GoalNode]()
 
+  private val derivationBuilding = metrics.timer("derivation-tree-building")
+
   def getDerivationTree(goalTuple: GoalTuple): GoalNode = {
-    derivationTreeCache.getOrElseUpdate(goalTuple, buildDerivationTree(goalTuple))
+    derivationTreeCache.getOrElseUpdate(goalTuple, derivationBuilding.time { buildDerivationTree(goalTuple) })
   }
 
   def getDerivationTreesForTable(goal: String): List[GoalNode] = {
