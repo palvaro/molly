@@ -30,8 +30,11 @@ class Verifier(failureSpec: FailureSpec, program: Program)
   }
 
   private val failureFreeGood = failureFreeUltimateModel.tableAtTime("good", failureSpec.eot).toSet
-  logger.debug(s"Failure-free 'good' is\n$failureFreeGood")
-
+  if (failureFreeGood.isEmpty) {
+    throw new IllegalStateException("'good' was empty in the failure-free run")
+  } else {
+    logger.debug(s"Failure-free 'good' is\n$failureFreeGood")
+  }
 
   def verify: Traversable[Run] = {
     val provenanceReader =
