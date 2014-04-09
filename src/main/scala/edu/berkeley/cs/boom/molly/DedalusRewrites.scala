@@ -11,8 +11,6 @@ object DedalusRewrites {
 
   /**
    * Modify a program's rules and facts to reference a clock relation.
-   *
-   * Assumes that the first column of each predicate is a location specifier.
    */
   def referenceClockRules(program: Program): Program = {
     def nextClock(loc: Atom) =
@@ -22,18 +20,20 @@ object DedalusRewrites {
     def asyncClock(from: Atom, to: Atom) =
       Predicate("clock", List(from, to, nreserved, mreserved), notin = false, None)
 
+    def appendCol(col: Atom)(pred: Predicate): Predicate =
+      pred.copy(cols = pred.cols :+ col)
+
     def rewriteHead(pred: Predicate, time: Time): Predicate = time match {
-      case Next() => pred.copy(cols = pred.cols ++ List(Expr(nreserved, "+", IntLiteral(1))))
-      case Async() => pred.copy(cols = pred.cols ++ List(mreserved))
-      case Tick(t) => pred.copy(cols = pred.cols ++ List(IntLiteral(t)))
+      case Next()  => appendCol(Expr(nreserved, "+", IntLiteral(1)))(pred)
+      case Async() => appendCol(mreserved)(pred)
+      case Tick(t) => appendCol(IntLiteral(t))(pred)
     }
 
     def rewriteBodyElem(elem: Either[Predicate, Expr]): Either[Predicate, Expr] =
-      elem match {
-        case r @ Right(expr) => r
-        case Left(pred) => pred.time match {
-          case Some(Tick(t)) => Left(pred.copy(cols = pred.cols ++ List(IntLiteral(t))))
-          case _ => Left(pred.copy(cols = pred.cols ++ List(nreserved)))
+      elem.left.map { pred =>
+        pred.time match {
+          case Some(Tick(t)) => appendCol(IntLiteral(t))(pred)
+          case _ => appendCol(nreserved)(pred)
         }
       }
 
@@ -45,22 +45,17 @@ object DedalusRewrites {
             // For local rules, we still need to reference the clock in order to guarantee that the
             // clock variable appears in a non-negated body predicate.  We use localClock in order
             // to reduce the number of possible derivations.
-            Rule(head.copy(cols = head.cols ++ List(nreserved)), body.map(rewriteBodyElem) ++ List(Left(localClock(loc))))
-          case Some(time) =>
-            time match {
-              case Next() =>
-                Rule(rewriteHead(head, Next()), body.map(rewriteBodyElem) ++ List(Left(nextClock(loc))))
-              case Async() =>
-                val from = rule.bodyPredicates(0).cols(0)
-                val to = head.cols(0)
-                Rule(rewriteHead(head, Async()), body.map(rewriteBodyElem) ++ List(Left(asyncClock(from, to))))
-              case Tick(number) =>
-                throw new IllegalStateException("Rule head can't only hold at a specific time step")
-            }
+            Rule(appendCol(nreserved)(head), body.map(rewriteBodyElem) ++ List(Left(localClock(loc))))
+          case Some(Next()) =>
+            Rule(rewriteHead(head, Next()), body.map(rewriteBodyElem) ++ List(Left(nextClock(loc))))
+          case Some(Async()) =>
+            val to = head.cols(0)
+            Rule(rewriteHead(head, Async()), body.map(rewriteBodyElem) ++ List(Left(asyncClock(loc, to))))
+          case Some(Tick(number)) =>
+            throw new IllegalStateException("Rule head can't only hold at a specific time step")
         }
     }
 
-    // TODO: handle facts without times => add persistence rules:
     program.copy(rules = program.rules.map(rewriteRule), facts = program.facts.map(f => rewriteHead(f, f.time.get)))
   }
 

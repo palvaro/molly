@@ -69,12 +69,8 @@ case class Predicate(tableName: String,
    * Returns a list of (variableName, (tableName, colNumber)) tuples.
    */
   def variablesWithIndexes: List[(String, (String, Int))] = {
-    cols.zipWithIndex.flatMap { case (col, index) =>
-      col match {
-        case Identifier("_") => None
-        case Identifier(i) => Some((i, (tableName, index)))
-        case _ => None
-      }
+    cols.zipWithIndex.collect {
+      case (Identifier(i), index) if i != "_" => (i, (tableName, index))
     }
   }
 

@@ -49,8 +49,7 @@ object SATSolver extends Logging {
           case cf @ CrashFailure(ml.from, t) if t <= ml.time => cf
           case cf @ CrashFailure(ml.to, t) if t + 1 >= ml.time => cf
         }.isDefined
-      val omissions =
-        vars.collect { case ml @ MessageLoss(from, to, time) => ml }.filterNot(subsumedByCrash)
+      val omissions = vars.collect { case ml: MessageLoss => ml }.filterNot(subsumedByCrash)
       if (crashes.isEmpty && omissions.isEmpty) {
         None
       } else {

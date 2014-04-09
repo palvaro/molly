@@ -7,7 +7,7 @@ import edu.berkeley.cs.boom.molly.DedalusTyper._
 import edu.berkeley.cs.boom.molly.wrappers.C4Wrapper
 import edu.berkeley.cs.boom.molly.derivations.{GoalNode, GoalTuple, ProvenanceReader}
 import edu.berkeley.cs.boom.molly.derivations.ProvenanceReader._
-import scalaz._, Scalaz._
+import scalaz.syntax.id._
 import com.codahale.metrics.MetricRegistry
 
 
@@ -25,7 +25,7 @@ class ProvenanceSuite extends FunSuite with Matchers {
       """.stripMargin
     val failureFreeSpec = FailureSpec(1, 0, 0, List("loc"), Set.empty)
     val program =
-      (parseProgram _ >>> referenceClockRules >>> addProvenanceRules >>> failureFreeSpec.addClockFacts >>> inferTypes)(src)
+      src |> parseProgram |> referenceClockRules |> addProvenanceRules |>  failureFreeSpec.addClockFacts |>  inferTypes
     val model = new C4Wrapper("agg_prov_test", program).run
     model.tables("counts").toSet should be (Set(List("loc", "A", "3", "1"), List("loc", "B", "1", "1")))
     val provenance =  new ProvenanceReader(program, failureFreeSpec, model)

@@ -11,7 +11,6 @@ import edu.berkeley.cs.boom.molly.ast.Program
 import java.util.concurrent.atomic.AtomicInteger
 import scalaz._
 import Scalaz._
-import scala.collection.mutable
 import nl.grons.metrics.scala.InstrumentedBuilder
 import com.codahale.metrics.MetricRegistry
 
@@ -79,13 +78,11 @@ class ProvenanceReader(program: Program,
   import ProvenanceReader._
   private val nextRuleNodeId = new AtomicInteger(0)
   private val nextGoalNodeId = new AtomicInteger(0)
-  private val derivationTreeCache = new mutable.HashMap[GoalTuple, GoalNode]()
 
   private val derivationBuilding = metrics.timer("derivation-tree-building")
 
-  def getDerivationTree(goalTuple: GoalTuple): GoalNode = {
-    derivationTreeCache.getOrElseUpdate(goalTuple, derivationBuilding.time { buildDerivationTree(goalTuple) })
-  }
+  val getDerivationTree: GoalTuple => GoalNode =
+    Memo.mutableHashMapMemo { derivationBuilding.time { buildDerivationTree(_) }}
 
   def getDerivationTreesForTable(goal: String): List[GoalNode] = {
     model.tableAtTime(goal, failureSpec.eot).map(GoalTuple(goal, _)).map(getDerivationTree)
@@ -167,7 +164,7 @@ class ProvenanceReader(program: Program,
         val matchingTuples = model.tables(tuple.table).filter(matchesPattern(tuple.cols))
         val ruleFirings = findRuleFirings(tuple)
         val internallyConsistent = matchingTuples.isEmpty == ruleFirings.isEmpty
-        assert(internallyConsistent, "sTuple $tuple found without derivation (or vice-versa)")
+        assert(internallyConsistent, s"Tuple $tuple found without derivation (or vice-versa)")
         assert(matchingTuples.isEmpty, s"Found tuple ${matchingTuples(0)} that appears in a notin")
         assert(ruleFirings.isEmpty,
           s"Found rule firings $ruleFirings for tuple $tuple that appears in a notin")
@@ -222,11 +219,8 @@ class ProvenanceReader(program: Program,
     // Fortunately, the current method of generating the provenance rules ensures that those
     // bindings will also be recorded in the head, so we can just skip over expressions:
     require(provRule.head.cols.size == provTableRow.size, "Incorrect number of columns")
-    val bindings = provRule.head.cols.zip(provTableRow).flatMap { case (atom, provValue) =>
-      atom match {
-        case Identifier(ident) => Some((ident, provValue))
-        case _ => None
-      }
+    val bindings = provRule.head.cols.zip(provTableRow).collect {
+      case (Identifier(ident), provValue) => (ident, provValue)
     } ++ List("_" -> WILDCARD)
     bindings.toMap
   }

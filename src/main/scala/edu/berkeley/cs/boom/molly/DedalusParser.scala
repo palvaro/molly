@@ -2,6 +2,8 @@ package edu.berkeley.cs.boom.molly
 
 import org.kiama.util.PositionedParserUtilities
 import edu.berkeley.cs.boom.molly.ast._
+import java.io.File
+import scala.io.Source
 
 
 trait DedalusParser extends PositionedParserUtilities {
@@ -54,5 +56,23 @@ trait DedalusParser extends PositionedParserUtilities {
 object DedalusParser extends DedalusParser {
   def parseProgram(str: CharSequence): Program = {
     parseAll(program, str).get
+  }
+
+  def parseProgramAndIncludes(includeSearchPath: File)(str: CharSequence): Program = {
+    processIncludes(parseProgram(str), includeSearchPath)
+  }
+
+  private def processIncludes(program: Program, includeSearchPath: File): Program = {
+    val includes = program.includes.map { include =>
+      val includeFile = new File(includeSearchPath, include.file)
+      val newProg = DedalusParser.parseProgram(Source.fromFile(includeFile).getLines().mkString("\n"))
+      processIncludes(newProg, includeSearchPath)
+    }
+    Program(
+      program.rules ++ includes.flatMap(_.rules),
+      program.facts ++ includes.flatMap(_.facts),
+      program.includes,
+      program.tables
+    )
   }
 }

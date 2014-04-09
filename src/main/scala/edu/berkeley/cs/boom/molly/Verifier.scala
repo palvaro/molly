@@ -6,9 +6,9 @@ import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.derivations.{GoalNode, Message, SATSolver, ProvenanceReader}
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.cs.boom.molly.derivations.SATSolver.SATVariable
-import scala.collection.mutable
 import com.codahale.metrics.MetricRegistry
 import nl.grons.metrics.scala.InstrumentedBuilder
+import scalaz._
 
 case class RunStatus(underlying: String) extends AnyVal
 case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, model: UltimateModel,
@@ -20,7 +20,6 @@ class Verifier(failureSpec: FailureSpec, program: Program)
   private val failureFreeSpec = failureSpec.copy(eff = 0, maxCrashes = 0)
   private val failureFreeProgram = DedalusTyper.inferTypes(failureFreeSpec.addClockFacts(program))
   private val runId = new AtomicInteger(0)
-  private val runCache = new mutable.HashMap[FailureSpec, Traversable[Run]]()
 
   /**
    * The ultimate model of a failure-free execution, used to bootstrap the verification.
@@ -44,18 +43,14 @@ class Verifier(failureSpec: FailureSpec, program: Program)
     val satModels = SATSolver.solve(failureSpec, provenance, messages)
     val failureFreeRun =
       Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, messages, provenance)
-    Seq(failureFreeRun) ++ satModels.flatMap(getOrComputeRuns)
+    Seq(failureFreeRun) ++ satModels.flatMap(doVerify)
   }
 
   private def isGood(model: UltimateModel): Boolean = {
     model.tableAtTime("good", failureSpec.eot).toSet == failureFreeGood
   }
 
-  private def getOrComputeRuns(failureSpec: FailureSpec): Traversable[Run] = {
-    runCache.getOrElseUpdate(failureSpec, doVerify(failureSpec))
-  }
-
-  private def doVerify(failureSpec: FailureSpec): Traversable[Run] = {
+  private val doVerify: FailureSpec => Traversable[Run] = Memo.mutableHashMapMemo { failureSpec =>
     logger.info(s"Retesting with crashes ${failureSpec.crashes} and losses ${failureSpec.omissions}")
     val failProgram = DedalusTyper.inferTypes(failureSpec.addClockFacts(program))
     val model = new C4Wrapper("with_errors", failProgram).run
@@ -68,7 +63,7 @@ class Verifier(failureSpec: FailureSpec, program: Program)
       // that omissions on those new channels don't produce counterexamples:
       val seed: Set[SATVariable] = failureSpec.crashes ++ failureSpec.omissions
       val satModels = SATSolver.solve(failureSpec, provenance, messages, seed) -- Set(failureSpec)
-      val counterexamples = satModels.flatMap(getOrComputeRuns).filter(r => r.status == RunStatus("failure"))
+      val counterexamples = satModels.flatMap(doVerify).filter(r => r.status == RunStatus("failure"))
       if (counterexamples.isEmpty) {
         List(Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model, messages, provenance))
       } else {
