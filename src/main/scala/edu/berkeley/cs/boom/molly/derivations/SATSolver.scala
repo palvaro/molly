@@ -19,6 +19,7 @@ object SATSolver extends Logging {
   case class MessageLoss(from: String, to: String, time: Int) extends SATVariable {
     require (from != to, "Can't lose messages sent to self")
   }
+  case class Not(v: SATVariable) extends SATVariable
 
   /**
    * @param failureSpec a description of failures.
@@ -68,7 +69,12 @@ object SATSolver extends Logging {
     val satVariableToId = mutable.HashMap[SATVariable, Int]()
 
     implicit def satVarToInt(satVar: SATVariable): Int = {
-      val id = satVariableToId.getOrElseUpdate(satVar, solver.nextFreeVarId(true))
+      val id = satVariableToId.getOrElseUpdate(satVar, {
+        satVar match {
+          case Not(v) => -1 * satVarToInt(v)
+          case _ => solver.nextFreeVarId(true)
+        }
+      })
       idToSatVariable(id) = satVar
       id
     }
@@ -109,15 +115,12 @@ object SATSolver extends Logging {
     // Message losses:
     for (
       derivation <- distinctGoalDerivations;
-      importantClocks = derivation.importantClocks;
-      // Only allow failures before the EFF:
-      failures = importantClocks.filter(_._3 < failureSpec.eff)
-      if !failures.isEmpty
+      importantClocks = derivation.importantClocks
+      if !importantClocks.isEmpty
     ) {
-      logger.debug(s"Goal ${goal.tuple} has possible failures $failures")
       // The message could be missing due to a message loss or due to its
       // sender having crashed at an earlier timestamp:
-      val messageLosses = failures.map(MessageLoss.tupled)
+      val messageLosses = importantClocks.map(MessageLoss.tupled)
       val crashes = messageLosses.flatMap { loss =>
         val firstSendTime = firstMessageSendTimes.getOrElse(loss.from, 1)
         val crashTimes = firstSendTime to loss.time
@@ -126,8 +129,10 @@ object SATSolver extends Logging {
       solver.addClause(messageLosses ++ crashes)
     }
 
-    // Assume any message losses that have already occurred:
-    val assumptions = seed
+    // Assume any message losses that have already occurred & disallow failures at or after the EFF
+    val nonCrashes = distinctGoalDerivations.flatMap(_.importantClocks)
+      .filter(_._3 >= failureSpec.eff).map(MessageLoss.tupled).map(Not)
+    val assumptions = seed ++ nonCrashes
 
     val models = ArrayBuffer[Set[SATVariable]]()
     metrics.timer("sat4j-time").time {
