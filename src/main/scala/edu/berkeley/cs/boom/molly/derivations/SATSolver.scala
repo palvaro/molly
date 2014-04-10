@@ -140,6 +140,7 @@ object SATSolver extends Logging {
         }
       }
     }
+    solver.reset()  // Required to allow the solver to be GC'ed.
     models
   }
 }
