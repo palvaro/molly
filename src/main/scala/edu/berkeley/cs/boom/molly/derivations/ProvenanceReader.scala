@@ -127,6 +127,7 @@ class ProvenanceReader(program: Program,
     val ruleNodes = ruleFirings.map { case (provRuleName, provTableRow) =>
       val provRule = program.rules.find(_.head.tableName == provRuleName).get
       val bindings = provRowToVariableBindings(provRule, provTableRow)
+      val time = bindings("NRESERVED").toInt
       // Substitute the variable bindings to determine the set of goals used by this rule.
       def substituteBindings(pred: Predicate): GoalTuple = {
         val goalCols = pred.cols.map {
@@ -140,11 +141,10 @@ class ProvenanceReader(program: Program,
         }
         GoalTuple(pred.tableName, goalCols)
       }
-      val bodyGoalTuples = provRule.bodyPredicates.filterNot(_.notin).map(substituteBindings)
+
       // If this query contains aggregates, then we need to add goals for any tuples that
       // contributed to those aggregates:
-      val time = bindings("NRESERVED").toInt
-      val aggGoalTuples = provRule.head.variablesInAggregates.flatMap { aggVar =>
+      val aggGoals = provRule.head.variablesInAggregates.flatMap { aggVar =>
         val aggPreds =
           provRule.bodyPredicates.filter(_.variables.contains(aggVar)).map(substituteBindings)
         aggPreds.flatMap { pred =>
@@ -154,29 +154,29 @@ class ProvenanceReader(program: Program,
         }
       }
 
-      val newGoalTuples = aggGoalTuples ++ bodyGoalTuples
+      val (negativePreds, positivePreds) = provRule.bodyPredicates.partition(_.notin)
+      val positiveGoals = positivePreds.map(substituteBindings) ++ aggGoals
+      val negativeGoals = negativePreds.map(substituteBindings)
+      logger.debug(s"Positive subgoals: $positiveGoals")
+      logger.debug(s"Negative subgoals: $negativeGoals")
 
-      logger.debug(s"New subgoal tuples are $newGoalTuples")
-      // As a sanity check, make sure that negated tuples don't appear in their respective tables
-      // or any provenance tables:
-      val notinTuples = provRule.bodyPredicates.filter(_.notin).map(substituteBindings)
-      for (tuple <- notinTuples) {
-        val matchingTuples = model.tables(tuple.table).filter(matchesPattern(tuple.cols))
-        val ruleFirings = findRuleFirings(tuple)
+      // As a sanity check, ensure that negative goals don't have any derivations:
+      for (goal <- negativeGoals) {
+        val matchingTuples = model.tables(goal.table).filter(matchesPattern(goal.cols))
+        val ruleFirings = findRuleFirings(goal)
         val internallyConsistent = matchingTuples.isEmpty == ruleFirings.isEmpty
-        assert(internallyConsistent, s"Tuple $tuple found without derivation (or vice-versa)")
-        assert(matchingTuples.isEmpty, s"Found tuple ${matchingTuples(0)} that appears in a notin")
-        assert(ruleFirings.isEmpty,
-          s"Found rule firings $ruleFirings for tuple $tuple that appears in a notin")
+        assert(internallyConsistent, s"Tuple $goal found in table without derivation (or vice-versa)")
+        assert(matchingTuples.isEmpty, s"Found derivation ${matchingTuples(0)} of negative goal $goal")
+        assert(ruleFirings.isEmpty, s"Found rule firings $ruleFirings for negative goal $goal")
       }
+
       // Recursively compute the provenance of the new goals:
-      RuleNode(nextRuleNodeId.getAndIncrement,
-        provRule, newGoalTuples.map(getDerivationTree).toSet)
+      RuleNode(nextRuleNodeId.getAndIncrement, provRule, positiveGoals.map(getDerivationTree).toSet)
     }
     GoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes)
   }
 
-  private def findRuleFirings(goalTuple: GoalTuple) = {
+  private def findRuleFirings(goalTuple: GoalTuple): Set[(String, List[String])] = {
     // Find provenance tables that might explain how we derived `goalTuple`:
     val provTables = program.tables.map(_.name).filter(_.matches(s"^${goalTuple.table}_prov\\d+"))
     logger.debug(s"Table '${goalTuple.table}' has provenance tables $provTables")
