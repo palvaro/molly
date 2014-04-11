@@ -60,21 +60,66 @@ object DedalusRewrites {
   }
 
   /**
+   * Splits a rule with an aggregation in its head into two separate rules,
+   * one that binds variables and another that performs the aggregation.
+   *
+   * For example, the rule
+   *    agg(X, count<Y>) :- a(X, Z), b(Z, Y)
+   * is rewritten as two rules:
+   *    agg_vars(X, Y, Z) :- a(X, Z), b(Z, Y)
+   *    agg(X, count<Y>) :- agg_vars(X, Y, _)
+   */
+  def splitAggregateRules(program: Program): Program = {
+    val (rules, aggRules) = program.rules.partition(_.head.variablesInAggregates.isEmpty)
+    program.copy(rules = rules ++ aggRules.flatMap(splitAggregateRule))
+  }
+
+  private def splitAggregateRule(rule: Rule): Seq[Rule] = {
+    assert (!rule.head.variablesInAggregates.isEmpty, "Expected rule with aggregation")
+    val ruleSansAgg =
+      rule.copy(head = rule.head.copy(cols = rule.head.cols.filterNot(_.isInstanceOf[Aggregate])))
+    val varsRule = recordAllVariableBindings(ruleSansAgg, ruleSansAgg.head.tableName + "_vars")
+    val aggRuleBody = varsRule.head.cols.collect {
+      case i @ Identifier(x) =>
+        if (rule.head.variables.contains(x) || rule.head.variablesInAggregates.contains(x)) i
+        else dc
+    }
+    val aggRule = rule.copy(body = List(Left(varsRule.head.copy(time = None, cols = aggRuleBody))))
+    Seq(aggRule, varsRule)
+  }
+
+  /**
+   * Modify a rule head to record ALL variables, even ones that are only bound in aggregates.
+   */
+  private def recordAllVariableBindings(rule: Rule, newTableName: String): Rule = {
+    val newVariables =
+      (rule.head.variablesInExpressions ++ rule.variables) -- rule.head.variables
+    // Produce a new head, preserving the last time column:
+    val newHead = rule.head.copy(tableName = newTableName,
+      cols = rule.head.cols.take(rule.head.cols.size - 1) ++
+        newVariables.map(Identifier).filter(_ != dc) ++ List(rule.head.cols.last))
+    rule.copy(head = newHead)
+  }
+
+  /**
+   * Modify a rule head to record bound variables
+   */
+  private def recordBoundVariables(rule: Rule, newTableName: String): Rule = {
+    val newVariables =
+      (rule.head.variablesInExpressions ++ rule.boundVariables) -- rule.head.variables
+    // Produce a new head, preserving the last time column:
+    val newHead = rule.head.copy(tableName = newTableName,
+      cols = rule.head.cols.take(rule.head.cols.size - 1) ++
+        newVariables.map(Identifier).filter(_ != dc) ++ List(rule.head.cols.last))
+    rule.copy(head = newHead)
+  }
+
+  /**
    * Add rules and rewrite rule bodies to record provenance.
    */
   def addProvenanceRules(program: Program): Program = {
     val provenanceRules = program.rules.zipWithIndex.map { case (rule, number) =>
-      // Rename the rule head and modify it to record variable bindings.
-      // We also record the values of variables that appear in expressions in order to
-      // avoid the need to invert those expressions to recover the variable bindings
-      // inside the ProvenanceReader.
-      val newVariables =
-        (rule.head.variablesInExpressions ++ rule.boundVariables) -- rule.head.variables
-      // Produce a new head, preserving the last time column:
-      val newHead = rule.head.copy(tableName = rule.head.tableName + "_prov" + number,
-        cols = rule.head.cols.take(rule.head.cols.size - 1) ++
-          newVariables.map(Identifier).filter(_ != dc) ++ List(rule.head.cols.last))
-      rule.copy(head = newHead)
+      recordBoundVariables(rule, rule.head.tableName + "_prov" + number)
     }
     program.copy(rules = program.rules ++ provenanceRules)
   }

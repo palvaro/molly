@@ -46,6 +46,9 @@ case class Rule(head: Predicate, body: List[Either[Predicate, Expr]]) extends Cl
   def variablesWithIndexes: List[(String, (String, Int))] = {
     (List(head) ++ bodyPredicates).flatMap(_.variablesWithIndexes)
   }
+  def variables: Set[String] = {
+    variablesWithIndexes.map(_._1).toSet
+  }
   /** Variables that are bound in the body (i.e. appear more than once) */
   def boundVariables: Set[String] = {
     val allVars =

@@ -39,7 +39,7 @@ object SyncFTChecker extends Logging {
   def check(config: Config): Traversable[Run] = {
     val combinedInput = config.inputPrograms.flatMap(Source.fromFile(_).getLines()).mkString("\n")
     val includeSearchPath = config.inputPrograms(0).getParentFile
-    val program = combinedInput |> parseProgramAndIncludes(includeSearchPath) |> referenceClockRules |> addProvenanceRules
+    val program = combinedInput |> parseProgramAndIncludes(includeSearchPath) |> referenceClockRules |> splitAggregateRules |> addProvenanceRules
     val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
     val verifier = new Verifier(failureSpec, program)
     logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
