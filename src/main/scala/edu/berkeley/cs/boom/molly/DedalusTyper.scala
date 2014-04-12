@@ -10,16 +10,15 @@ import scala.collection.JavaConverters._
 
 object DedalusTyper {
 
-  private type Type = String
+  type Type = String
   private type ColRef = (String, Int)  // (tableName, columnNumber) pairs
-  private val INT: Type = "int"
-  private val STRING: Type = "string"
-  private val UNKNOWN: Type = "unknown"
+  val INT: Type = "int"
+  val STRING: Type = "string"
+  val LOCATION: Type = "location"
+  val UNKNOWN: Type = "unknown"
 
   private def inferTypeOfAtom(atom: Atom): Type = {
     atom match {
-      case Identifier("MRESERVED") => INT
-      case Identifier("NRESERVED") => INT
       case StringLiteral(_) => STRING
       case IntLiteral(_) => INT
       case a: Aggregate => INT
@@ -28,10 +27,18 @@ object DedalusTyper {
     }
   }
 
+  private def dom(types: Set[Type]): Set[Type] = {
+    if (types == Set(STRING, LOCATION)) {
+      Set(LOCATION)
+    } else {
+      types
+    }
+  }
+
   /**
    * Infers the types of predicate columns.
    *
-   * The possible column types are 'string' and 'int'.
+   * The possible column types are 'string', 'int', and 'location'.
    *
    * @param program the program to type
    * @return a copy of the program with its `tables` field filled in.
@@ -49,7 +56,11 @@ object DedalusTyper {
       ("crash", 0),
       ("crash", 1),
       ("crash", 2),
-      ("crash", 3)
+      ("crash", 3),
+      ("clock", 0),
+      ("clock", 1),
+      ("clock", 2),
+      ("clock", 3)
     )
 
     // Determine (maximal) sets of columns that must have the same type:
@@ -70,10 +81,12 @@ object DedalusTyper {
       // Some meta-EDB tables might be empty in certain runs (such as crash()), so we need to
       // hard-code their type evidence:
       val metaEDBTypes = Seq(
-        (colRefToMinColRef.find(("crash", 0)), STRING),
-        (colRefToMinColRef.find(("crash", 1)), STRING),
+        (colRefToMinColRef.find(("crash", 0)), LOCATION),
+        (colRefToMinColRef.find(("crash", 1)), LOCATION),
         (colRefToMinColRef.find(("crash", 2)), INT),
-        (colRefToMinColRef.find(("crash", 3)), INT)
+        (colRefToMinColRef.find(("crash", 3)), INT),
+        (colRefToMinColRef.find(("clock", 0)), LOCATION),
+        (colRefToMinColRef.find(("clock", 1)), LOCATION)
       )
       val inferredFromPredicates = for (
         pred <- allPredicates;
@@ -106,9 +119,9 @@ object DedalusTyper {
       val numCols = numColsInTable(tableName)
       val colTypes = (0 to numCols - 1).map { colNum =>
         val representative = colRefToMinColRef.find((tableName, colNum))
-        val types = typeEvidence.getOrElse(representative,
+        val types = dom(typeEvidence.getOrElse(representative,
           throw new Exception(
-            s"No evidence for type of column ${representative._2} of ${representative._1}"))
+            s"No evidence for type of column ${representative._2} of ${representative._1}")))
         assert(types.size == 1,
           s"Conflicting evidence for type of column $colNum of $tableName: $types")
         types.head
