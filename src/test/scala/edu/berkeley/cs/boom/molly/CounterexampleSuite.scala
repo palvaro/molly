@@ -49,7 +49,11 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
     //(Seq("3pc.ded", "2pc_assert.ded"),        6,      3,     Seq("a", "b", "C", "d"),       2,    true),
 
     (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       1,    true),
-    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false)
+    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false),
+  
+    // simulating the kafka bug
+    (Seq("kafka.ded"),                           5,      3,     Seq("a", "b", "c", "C", "Z"),       1,    true),
+    (Seq("kafka.ded"),                           5,      3,     Seq("a", "b", "c", "C", "Z"),       0,    false)
   )
 
   property("SAT guided search should correctly find counterexamples") {
