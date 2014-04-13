@@ -48,7 +48,7 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
     //(Seq("3pc.ded", "2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
 
     (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       1,    true),
-    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false),
+    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false)
   
     // simulating the kafka bug
     //(Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       1,    true),

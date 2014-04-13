@@ -81,7 +81,9 @@ object SATSolver extends Logging {
     implicit def satVarsToVecInt(clause: Iterable[SATVariable]): IVecInt =
       new VecInt(clause.map(satVarToInt).toArray)
 
-    val distinctGoalDerivations = goal.enumerateDistinctDerivations
+    val distinctGoalDerivations = metrics.timer("proof-tree-enumeration").time {
+       goal.enumerateDistinctDerivations
+    }
     // Crash failures:
     // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
     // will be candidates for crashing:

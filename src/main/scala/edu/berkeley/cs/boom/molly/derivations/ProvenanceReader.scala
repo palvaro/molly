@@ -13,6 +13,7 @@ import scalaz._
 import Scalaz._
 import nl.grons.metrics.scala.InstrumentedBuilder
 import com.codahale.metrics.MetricRegistry
+import edu.berkeley.cs.boom.molly.util.HashcodeCaching
 
 
 case class GoalTuple(table: String, cols: List[String]) {
@@ -28,8 +29,8 @@ case class GoalTuple(table: String, cols: List[String]) {
  *              more than one rule, then there are multiple derivations of
  *              this fact.
  */
-case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) {
-  def importantClocks: Set[(String, String, Int)] = {
+case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) extends HashcodeCaching {
+  lazy val importantClocks: Set[(String, String, Int)] = {
     val childrenClocks = rules.flatMap(_.subgoals).flatMap(_.importantClocks)
     val newClock = tuple match {
       case GoalTuple("clock", List(from, to, time, _))
@@ -39,7 +40,7 @@ case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) {
     childrenClocks ++ newClock
   }
 
-  def enumerateDistinctDerivations: Set[GoalNode] = {
+  lazy val enumerateDistinctDerivations: Set[GoalNode] = {
     if (rules.isEmpty) {
       Set(this)
     } else {
@@ -54,9 +55,9 @@ case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) {
  * @param rule the rule that was applied.
  * @param subgoals the facts that were used in this rule application.
  */
-case class RuleNode(id: Int, rule: Rule, subgoals: Set[GoalNode]) {
+case class RuleNode(id: Int, rule: Rule, subgoals: Set[GoalNode]) extends HashcodeCaching {
   require (!subgoals.isEmpty, "RuleNode must have subgoals")
-  def enumerateDistinctDerivationsOfSubGoals: List[RuleNode] = {
+  lazy val enumerateDistinctDerivationsOfSubGoals: List[RuleNode] = {
     val choices: List[List[GoalNode]] = subgoals.map(_.enumerateDistinctDerivations.toList).toList
     choices.sequence.map(subgoalDerivations => this.copy(subgoals = subgoalDerivations.toSet))
   }
