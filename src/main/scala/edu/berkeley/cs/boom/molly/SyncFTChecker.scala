@@ -16,7 +16,8 @@ case class Config(
   eff: Int = 2,
   crashes: Int = 0,
   nodes: Seq[String] = Seq(),
-  inputPrograms: Seq[File] = Seq()
+  inputPrograms: Seq[File] = Seq(),
+  useSymmetry: Boolean = false
 )
 
 object SyncFTChecker extends Logging {
@@ -26,6 +27,7 @@ object SyncFTChecker extends Logging {
     opt[Int]('f', "EFF") text "end of finite failures (default 2)" action { (x, c) => c.copy(eff = x)}
     opt[Int]('c', "crashes") text "crash failures (default 0)" action { (x, c) => c.copy(crashes = x)}
     opt[String]('N', "nodes") text "a comma-separated list of nodes (required)" required() action { (x, c) => c.copy(nodes = x.split(','))}
+    opt[Unit]("use-symmetry") text "use symmetry to skip equivalent failure scenarios" action { (x, c) => c.copy(useSymmetry = true) }
     arg[File]("<file>...") unbounded() minOccurs 1 text "Dedalus files" action { (x, c) => c.copy(inputPrograms = c.inputPrograms :+ x)}
   }
 
@@ -41,7 +43,7 @@ object SyncFTChecker extends Logging {
     val includeSearchPath = config.inputPrograms(0).getParentFile
     val program = combinedInput |> parseProgramAndIncludes(includeSearchPath) |> referenceClockRules |> splitAggregateRules |> addProvenanceRules
     val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
-    val verifier = new Verifier(failureSpec, program)
+    val verifier = new Verifier(failureSpec, program, useSymmetry = config.useSymmetry)
     logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
     verifier.verify
   }

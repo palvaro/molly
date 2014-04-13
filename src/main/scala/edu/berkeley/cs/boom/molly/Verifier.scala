@@ -9,12 +9,13 @@ import edu.berkeley.cs.boom.molly.derivations.SATSolver.SATVariable
 import com.codahale.metrics.MetricRegistry
 import nl.grons.metrics.scala.InstrumentedBuilder
 import scalaz._
+import edu.berkeley.cs.boom.molly.symmetry.SymmetryAwareMemo
 
 case class RunStatus(underlying: String) extends AnyVal
 case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, model: UltimateModel,
                messages: List[Message], provenance: List[GoalNode])
 
-class Verifier(failureSpec: FailureSpec, program: Program)
+class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean = false)
               (implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
 
   private val failureFreeSpec = failureSpec.copy(eff = 0, maxCrashes = 0)
@@ -50,7 +51,11 @@ class Verifier(failureSpec: FailureSpec, program: Program)
     model.tableAtTime("good", failureSpec.eot).toSet == failureFreeGood
   }
 
-  private val doVerify: FailureSpec => Traversable[Run] = Memo.mutableHashMapMemo { failureSpec =>
+  private val verifyMemo: ((FailureSpec) => Traversable[Run]) => (FailureSpec) => Traversable[Run] =
+    if (useSymmetry) SymmetryAwareMemo[Traversable[Run]](program, failureSpec)
+    else Memo.mutableHashMapMemo[FailureSpec, Traversable[Run]].apply
+
+  private val doVerify: FailureSpec => Traversable[Run] = verifyMemo { failureSpec =>
     logger.info(s"Retesting with crashes ${failureSpec.crashes} and losses ${failureSpec.omissions}")
     val failProgram = DedalusTyper.inferTypes(failureSpec.addClockFacts(program))
     val model = new C4Wrapper("with_errors", failProgram).run
