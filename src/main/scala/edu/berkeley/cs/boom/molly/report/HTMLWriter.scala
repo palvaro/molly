@@ -1,6 +1,6 @@
 package edu.berkeley.cs.boom.molly.report
 
-import java.io.File
+import java.io.{PrintWriter, File}
 import edu.berkeley.cs.boom.molly.Run
 import edu.berkeley.cs.boom.molly.report.MollyCodecJsons._
 import argonaut._, Argonaut._
@@ -8,6 +8,9 @@ import org.apache.commons.io.FileUtils
 import scala.collection.JavaConversions._
 import scala.sys.process._
 import org.apache.commons.io.filefilter.{FalseFileFilter, TrueFileFilter}
+import scalaz.EphemeralStream
+import scalaz.syntax.id._
+import java.util.concurrent.Executors
 
 
 object HTMLWriter {
@@ -24,24 +27,42 @@ object HTMLWriter {
     }
   }
 
-  private def writeGraphviz(dot: String, outputDirectory: File, filename: String) {
+  private def writeGraphviz(dot: String, outputDirectory: File, filename: String) = {
     val dotFile = new File(outputDirectory, s"$filename.dot")
     val svgFile = new File(outputDirectory, s"$filename.svg")
     FileUtils.write(dotFile, dot)
-    val dotExitCode = s"dot -Tsvg -o ${svgFile.getAbsolutePath} ${dotFile.getAbsolutePath}".!
-    assert (dotExitCode == 0)
+    new Runnable() {
+      def run() {
+        val dotExitCode = s"dot -Tsvg -o ${svgFile.getAbsolutePath} ${dotFile.getAbsolutePath}".!
+        assert(dotExitCode == 0)
+      }
+    }
   }
 
-  def write(outputDirectory: File, originalPrograms: List[File], runs: Traversable[Run]) = {
+  def write(outputDirectory: File, originalPrograms: List[File], runs: EphemeralStream[Run],
+            generateProvenanceDiagrams: Boolean) = {
     outputDirectory.mkdirs()
     require (outputDirectory.isDirectory)
     copyTemplateFiles(outputDirectory)
-    FileUtils.write(new File(outputDirectory, "runs.json"), runs.toList.asJson.pretty(spaces2))
+    val runsFile =
+      new PrintWriter(FileUtils.openOutputStream(new File(outputDirectory, "runs.json")))
+    // Unfortunately, Argonaut doesn't seem to support streaming JSON writing, hence this code:
+    var first: Boolean = true
+    runsFile.print("[\n")
+    val executor = Executors.newFixedThreadPool(4)  // Some parallelism when writing out DOT files
     for (run <- runs) {
+      if (!first) runsFile.print(",\n")
+      runsFile.print(run.asJson.toString())
+      first = false
       writeGraphviz(SpacetimeDiagramGenerator.generate(run.failureSpec, run.messages),
-        outputDirectory, s"run_${run.iteration}_spacetime")
-      writeGraphviz(ProvenanceDiagramGenerator.generate(run.provenance),
-        outputDirectory, s"run_${run.iteration}_provenance")
+        outputDirectory, s"run_${run.iteration}_spacetime") |> executor.submit
+      if (generateProvenanceDiagrams) {
+        writeGraphviz(ProvenanceDiagramGenerator.generate(run.provenance),
+          outputDirectory, s"run_${run.iteration}_provenance") |> executor.submit
+      }
     }
+    runsFile.print("\n]")
+    runsFile.close()
+    executor.shutdown()  // Wait for DOT rendering to finish
   }
 }

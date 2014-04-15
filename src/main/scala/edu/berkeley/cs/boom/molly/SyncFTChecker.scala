@@ -9,6 +9,7 @@ import edu.berkeley.cs.boom.molly.report.HTMLWriter
 import com.codahale.metrics.{Slf4jReporter, MetricRegistry}
 import java.util.concurrent.TimeUnit
 import scalaz.syntax.id._
+import scalaz.EphemeralStream
 
 
 case class Config(
@@ -17,7 +18,8 @@ case class Config(
   crashes: Int = 0,
   nodes: Seq[String] = Seq(),
   inputPrograms: Seq[File] = Seq(),
-  useSymmetry: Boolean = false
+  useSymmetry: Boolean = false,
+  generateProvenanceDiagrams: Boolean = false
 )
 
 object SyncFTChecker extends Logging {
@@ -28,6 +30,7 @@ object SyncFTChecker extends Logging {
     opt[Int]('c', "crashes") text "crash failures (default 0)" action { (x, c) => c.copy(crashes = x)}
     opt[String]('N', "nodes") text "a comma-separated list of nodes (required)" required() action { (x, c) => c.copy(nodes = x.split(','))}
     opt[Unit]("use-symmetry") text "use symmetry to skip equivalent failure scenarios" action { (x, c) => c.copy(useSymmetry = true) }
+    opt[Unit]("prov-diagrams") text "generate provenance diagrams for each execution" action { (x, c) => c.copy(generateProvenanceDiagrams = true) }
     arg[File]("<file>...") unbounded() minOccurs 1 text "Dedalus files" action { (x, c) => c.copy(inputPrograms = c.inputPrograms :+ x)}
   }
 
@@ -38,7 +41,7 @@ object SyncFTChecker extends Logging {
     .convertDurationsTo(TimeUnit.MILLISECONDS)
     .build()
 
-  def check(config: Config): Traversable[Run] = {
+  def check(config: Config): EphemeralStream[Run] = {
     val combinedInput = config.inputPrograms.flatMap(Source.fromFile(_).getLines()).mkString("\n")
     val includeSearchPath = config.inputPrograms(0).getParentFile
     val program = combinedInput |> parseProgramAndIncludes(includeSearchPath) |> referenceClockRules |> splitAggregateRules |> addProvenanceRules
@@ -51,9 +54,9 @@ object SyncFTChecker extends Logging {
   def main(args: Array[String]) {
     parser.parse(args, Config()) map { config =>
       val results = check(config)
-      metricsReporter.report()
       // TODO: name the output directory after the input filename and failure spec.
-      HTMLWriter.write(new File("output"), Nil, results)
+      HTMLWriter.write(new File("output"), Nil, results, config.generateProvenanceDiagrams)
+      metricsReporter.report()  // This appears after the HTML writing due to laziness
     } getOrElse {
       // Error messages
     }

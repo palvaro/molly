@@ -9,7 +9,7 @@ import edu.berkeley.cs.boom.molly.derivations.SATSolver.SATVariable
 import com.codahale.metrics.MetricRegistry
 import nl.grons.metrics.scala.InstrumentedBuilder
 import scalaz._
-import edu.berkeley.cs.boom.molly.symmetry.SymmetryAwareMemo
+import scala.collection.mutable
 
 case class RunStatus(underlying: String) extends AnyVal
 case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, model: UltimateModel,
@@ -36,7 +36,10 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
     logger.debug(s"Failure-free 'good' is\n$failureFreeGood")
   }
 
-  def verify: Traversable[Run] = {
+  // TODO: re-enable the symmetry analysis
+  private val alreadyExplored = mutable.HashSet[FailureSpec]()
+
+  def verify: EphemeralStream[Run] = {
     val provenanceReader =
       new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel)
     val messages = provenanceReader.getMessages
@@ -44,18 +47,31 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
     val satModels = SATSolver.solve(failureSpec, provenance, messages)
     val failureFreeRun =
       Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, messages, provenance)
-    Seq(failureFreeRun) ++ satModels.flatMap(doVerify)
+    failureFreeRun ##:: doVerify(satModels.iterator)
+  }
+
+  private def doVerify(queueToVerify: Iterator[FailureSpec]): EphemeralStream[Run] = {
+    val unexplored = queueToVerify.dropWhile(alreadyExplored.contains)
+    if (unexplored.isEmpty) {
+      EphemeralStream.emptyEphemeralStream
+    } else {
+      val failureSpec = unexplored.next()
+      assert (!alreadyExplored.contains(failureSpec))
+      val (run, potentialCounterexamples) = runFailureSpec(failureSpec)
+      alreadyExplored.add(failureSpec)
+      run ##:: doVerify(queueToVerify ++ potentialCounterexamples)
+    }
   }
 
   private def isGood(model: UltimateModel): Boolean = {
     model.tableAtTime("good", failureSpec.eot).toSet == failureFreeGood
   }
 
-  private val verifyMemo: ((FailureSpec) => Traversable[Run]) => (FailureSpec) => Traversable[Run] =
-    if (useSymmetry) SymmetryAwareMemo[Traversable[Run]](program, failureSpec)
-    else Memo.mutableHashMapMemo[FailureSpec, Traversable[Run]].apply
-
-  private val doVerify: FailureSpec => Traversable[Run] = verifyMemo { failureSpec =>
+  /**
+   * Given a failure spec, run it and return the verification result, plus any new potential
+   * counterexamples that should be explored.
+   */
+  private def runFailureSpec(failureSpec: FailureSpec): (Run, Set[FailureSpec]) = {
     logger.info(s"Retesting with crashes ${failureSpec.crashes} and losses ${failureSpec.omissions}")
     val failProgram = DedalusTyper.inferTypes(failureSpec.addClockFacts(program))
     val model = new C4Wrapper("with_errors", failProgram).run
@@ -67,16 +83,16 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
       // This run may have used more channels than the original run; verify
       // that omissions on those new channels don't produce counterexamples:
       val seed: Set[SATVariable] = failureSpec.crashes ++ failureSpec.omissions
-      val satModels = SATSolver.solve(failureSpec, provenance, messages, seed) -- Set(failureSpec)
-      val counterexamples = satModels.flatMap(doVerify).filter(r => r.status == RunStatus("failure"))
-      if (counterexamples.isEmpty) {
-        List(Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model, messages, provenance))
-      } else {
-        counterexamples
-      }
+      val potentialCounterexamples =
+        SATSolver.solve(failureSpec, provenance, messages, seed) -- Set(failureSpec)
+      val run =
+        Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model, messages, provenance)
+      (run, potentialCounterexamples)
     } else {
       logger.info("Found counterexample: " + failureSpec)
-      List(Run(runId.getAndIncrement, RunStatus("failure"), failureSpec, model, messages, provenance))
+      val run =
+        Run(runId.getAndIncrement, RunStatus("failure"), failureSpec, model, messages, provenance)
+      (run, Set.empty)
     }
 
   }
