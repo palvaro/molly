@@ -143,21 +143,29 @@ class ProvenanceReader(program: Program,
         GoalTuple(pred.tableName, goalCols)
       }
 
-      // If this query contains aggregates, then we need to add goals for any tuples that
-      // contributed to those aggregates:
-      val aggGoals = provRule.head.variablesInAggregates.flatMap { aggVar =>
-        val aggPreds =
-          provRule.bodyPredicates.filter(_.variables.contains(aggVar)).map(substituteBindings)
-        aggPreds.flatMap { pred =>
-          val tuples = model.tableAtTime(pred.table, time)
-          val matchingTuples = tuples.filter(matchesPattern(pred.cols))
-          matchingTuples.map(t => GoalTuple(pred.table, t))
+      val (negativePreds, positivePreds) = provRule.bodyPredicates.partition(_.notin)
+      val negativeGoals = negativePreds.map(substituteBindings)
+      val positiveGoals = {
+        val aggVars = provRule.head.variablesInAggregates
+        if (aggVars.isEmpty) {
+          positivePreds.map(substituteBindings)
+        } else {
+          // If the rule contains aggregates, add each tuple that contributed to the aggregate
+          // as a goal.
+          val (predsWithoutAggVars, predsWithAggVars) =
+            positivePreds.partition(_.variables.intersect(aggVars).isEmpty)
+          val aggGoals = aggVars.flatMap { aggVar =>
+            val aggPreds = predsWithAggVars.map(substituteBindings)
+            aggPreds.flatMap { pred =>
+              val tuples = model.tableAtTime(pred.table, time)
+              val matchingTuples = tuples.filter(matchesPattern(pred.cols))
+              matchingTuples.map(t => GoalTuple(pred.table, t))
+            }
+          }
+          predsWithoutAggVars.map(substituteBindings) ++ aggGoals
         }
       }
 
-      val (negativePreds, positivePreds) = provRule.bodyPredicates.partition(_.notin)
-      val positiveGoals = positivePreds.map(substituteBindings) ++ aggGoals
-      val negativeGoals = negativePreds.map(substituteBindings)
       logger.debug(s"Positive subgoals: $positiveGoals")
       logger.debug(s"Negative subgoals: $negativeGoals")
 
