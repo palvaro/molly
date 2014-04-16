@@ -3,6 +3,7 @@ package edu.berkeley.cs.boom.molly
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.{Matchers, PropSpec}
 import java.io.File
+import com.codahale.metrics.MetricRegistry
 
 
 class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with Matchers {
@@ -59,7 +60,8 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
     forAll(scenarios) { (inputPrograms: Seq[String], eot: Int, eff: Int, nodes: Seq[String], crashes: Int, shouldFindCounterexample: Boolean) =>
       val inputFiles = inputPrograms.map(name => new File(examplesFTPath, name))
       val config = Config(eot, eff, crashes, nodes, inputFiles)
-      val results = SyncFTChecker.check(config)
+      val metrics = new MetricRegistry
+      val results = SyncFTChecker.check(config, metrics)
       val counterexamples = results.filter(_.status == RunStatus("failure")).map(_.failureSpec)
       if (shouldFindCounterexample) {
         counterexamples should not be empty

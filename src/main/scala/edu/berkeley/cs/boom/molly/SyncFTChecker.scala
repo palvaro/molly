@@ -34,30 +34,26 @@ object SyncFTChecker extends Logging {
     arg[File]("<file>...") unbounded() minOccurs 1 text "Dedalus files" action { (x, c) => c.copy(inputPrograms = c.inputPrograms :+ x)}
   }
 
-  implicit var metrics: MetricRegistry = new MetricRegistry()
-  val metricsReporter = Slf4jReporter.forRegistry(metrics)
-    .outputTo(logger.underlying)
-    .convertRatesTo(TimeUnit.SECONDS)
-    .convertDurationsTo(TimeUnit.MILLISECONDS)
-    .build()
-
-  def resetMetrics() {
-    metrics = new MetricRegistry
-  }
-
-  def check(config: Config): EphemeralStream[Run] = {
+  def check(config: Config, metrics: MetricRegistry): EphemeralStream[Run] = {
     val combinedInput = config.inputPrograms.flatMap(Source.fromFile(_).getLines()).mkString("\n")
     val includeSearchPath = config.inputPrograms(0).getParentFile
     val program = combinedInput |> parseProgramAndIncludes(includeSearchPath) |> referenceClockRules |> splitAggregateRules |> addProvenanceRules
     val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
-    val verifier = new Verifier(failureSpec, program, useSymmetry = config.useSymmetry)
+    val verifier = new Verifier(failureSpec, program, useSymmetry = config.useSymmetry)(metrics)
     logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
     verifier.verify
   }
 
   def main(args: Array[String]) {
+    val metrics = new MetricRegistry
+    val metricsReporter = Slf4jReporter.forRegistry(metrics)
+      .outputTo(logger.underlying)
+      .convertRatesTo(TimeUnit.SECONDS)
+      .convertDurationsTo(TimeUnit.MILLISECONDS)
+      .build()
+
     parser.parse(args, Config()) map { config =>
-      val results = check(config)
+      val results = check(config, metrics)
       // TODO: name the output directory after the input filename and failure spec.
       HTMLWriter.write(new File("output"), Nil, results, config.generateProvenanceDiagrams)
       metricsReporter.report()  // This appears after the HTML writing due to laziness

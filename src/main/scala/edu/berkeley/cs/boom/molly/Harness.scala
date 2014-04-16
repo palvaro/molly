@@ -1,26 +1,20 @@
 package edu.berkeley.cs.boom.molly
+
 import java.io.File
-import scala.io.Source
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.cs.boom.molly.DedalusRewrites._
-import edu.berkeley.cs.boom.molly.DedalusParser._
-import edu.berkeley.cs.boom.molly.ast._
-import edu.berkeley.cs.boom.molly.report.HTMLWriter
-import org.scalatest.prop.TableDrivenPropertyChecks.{Table => MyTable}
-import com.codahale.metrics.{Slf4jReporter, MetricRegistry, CsvReporter, ConsoleReporter}
+import org.scalatest.prop.TableDrivenPropertyChecks.{Table => ScalatestTable}
+import com.codahale.metrics.{MetricRegistry, CsvReporter, ConsoleReporter}
 import java.util.concurrent.TimeUnit
-import scalaz.syntax.id._
-import scalaz.EphemeralStream
-import java.util.{Date, Locale}
+import java.util.Locale
 
 object Harness extends Logging {
 
-  val s1 = MyTable(
+  val s1 = ScalatestTable(
     ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
     (Seq("ack_rb.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false)
   )
 
-  val scenarios = MyTable(
+  val scenarios = ScalatestTable(
     ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
     (Seq("simplog.ded", "deliv_assert.ded"),      6,      3,     Seq("a", "b", "c"),            0,    true),
     (Seq("rdlog.ded", "deliv_assert.ded"),        6,      3,     Seq("a", "b", "c"),            0,    false),
@@ -71,16 +65,15 @@ object Harness extends Logging {
     s1.foreach {case (inputPrograms: Seq[String], eot: Int, eff: Int, nodes: Seq[String], crashes: Int, shouldFindCounterexample: Boolean) =>
 
 
-  //implicit val metrics: MetricRegistry = new MetricRegistry()
-    SyncFTChecker.resetMetrics()
-  val csvreporter = CsvReporter.forRegistry(SyncFTChecker.metrics)
+  val metrics: MetricRegistry = new MetricRegistry()
+  val csvreporter = CsvReporter.forRegistry(metrics)
                                         .formatFor(Locale.US)
                                         .convertRatesTo(TimeUnit.SECONDS)
                                         .convertDurationsTo(TimeUnit.MILLISECONDS)
                                         .build(new File("./metrics/"));
 
 
-  val consolereporter = ConsoleReporter.forRegistry(SyncFTChecker.metrics)
+  val consolereporter = ConsoleReporter.forRegistry(metrics)
                                         .convertRatesTo(TimeUnit.SECONDS)
                                         .convertDurationsTo(TimeUnit.MILLISECONDS)
                                         .build();
@@ -91,7 +84,7 @@ object Harness extends Logging {
 
       val inputFiles = inputPrograms.map(name => new File("../examples_ft/" + name))
       val config = Config(eot, eff, crashes, nodes, inputFiles)
-      SyncFTChecker.check(config)      
+      SyncFTChecker.check(config, metrics)
       csvreporter.report()
       //consolereporter.report()
       
