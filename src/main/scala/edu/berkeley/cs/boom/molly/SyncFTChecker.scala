@@ -34,12 +34,16 @@ object SyncFTChecker extends Logging {
     arg[File]("<file>...") unbounded() minOccurs 1 text "Dedalus files" action { (x, c) => c.copy(inputPrograms = c.inputPrograms :+ x)}
   }
 
-  implicit val metrics: MetricRegistry = new MetricRegistry()
+  implicit var metrics: MetricRegistry = new MetricRegistry()
   val metricsReporter = Slf4jReporter.forRegistry(metrics)
     .outputTo(logger.underlying)
     .convertRatesTo(TimeUnit.SECONDS)
     .convertDurationsTo(TimeUnit.MILLISECONDS)
     .build()
+
+  def resetMetrics() {
+    metrics = new MetricRegistry
+  }
 
   def check(config: Config): EphemeralStream[Run] = {
     val combinedInput = config.inputPrograms.flatMap(Source.fromFile(_).getLines()).mkString("\n")
