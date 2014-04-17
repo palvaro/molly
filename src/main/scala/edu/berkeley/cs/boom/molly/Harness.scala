@@ -64,7 +64,8 @@ object Harness extends Logging {
 
   
   def checker(config: Config, scenario: (Seq[String], Int, Int, Seq[String], Int, Boolean)) {
-    val eots = List(5, 10, 15, 20, 25)
+    //val eots = List(5, 10, 15, 20, 25)
+    val eots = List(5,7,9,11,13,15)
     eots.foreach(e => checker_run(config.copy(eot = e, eff = e-3), scenario))
   }
 
