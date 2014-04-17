@@ -11,6 +11,11 @@ import com.github.tototoshi.csv.CSVWriter
 
 object Harness extends Logging {
 
+  val objectMapper = new ObjectMapper().registerModule(
+    new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, false))
+  val outputFile = new File("harness-results.csv")
+  val csvWriter = CSVWriter.open(outputFile)
+
   val scenarios = ScalatestTable(
     ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
     (Seq("simplog.ded", "deliv_assert.ded"),      6,      3,     Seq("a", "b", "c"),            0,    true),
@@ -57,36 +62,47 @@ object Harness extends Logging {
     //(Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       0,    false)
   )
 
-  def main(args: Array[String]) {
-    val objectMapper = new ObjectMapper().registerModule(
-      new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, false))
-    val outputFile = new File("harness-results.csv")
+  
+  def checker(config: Config, scenario: (Seq[String], Int, Int, Seq[String], Int, Boolean)) {
+    val eots = List(5, 10, 15, 20, 25)
+    eots.foreach(e => checker_run(config.copy(eot = e, eff = e-3), scenario))
+  }
 
+  def checker_run(config: Config, scenario: (Seq[String], Int, Int, Seq[String], Int, Boolean)) {
+
+    logger.debug(s"ok eot is $config.eot and eff is $config.eff")
+    val metrics: MetricRegistry = new MetricRegistry()
+    val (successes, counterexamples) =
+      SyncFTChecker.check(config, metrics).partition(_.status == RunStatus("success"))
+    // Compute these counts here to ensure that the ephemeral stream is evaluated before
+    // we retrieve the other metrics from the registry
+    val successCount = successes.size
+    val counterexampleCount = counterexamples.size
+    val metricsJson = objectMapper.writeValueAsString(metrics)
+    val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
+
+    csvWriter.writeRow(scenario.copy(_2 = config.eot, _3 = config.eff).productIterator.map(_.toString).toSeq ++
+      Seq(successCount, counterexampleCount, failureSpec.grossEstimate, metricsJson))
+  }
+
+  def main(args: Array[String]) {
     // For now, treat the results as a mixed of structured and semi-structured data.
     // If there are specific metrics that we want to be included in the spreadsheet,
     // we can pull them out and add them as extra columns.  To capture all of the rest
     // of the metrics, we write them into a JSON-valued field.
-    val csvWriter = CSVWriter.open(outputFile)
+    //val csvWriter = CSVWriter.open(outputFile)
     val header =
-      scenarios.heading.productIterator.toSeq ++ Seq("successes", "counterexamples", "metrics")
+      scenarios.heading.productIterator.toSeq ++ Seq("successes", "counterexamples", "upper bound", "metrics")
     csvWriter.writeRow(header)
     try {
       scenarios.foreach {
         case scenario @ (inputPrograms: Seq[String], eot: Int, eff: Int, nodes: Seq[String],
           crashes: Int, shouldFindCounterexample: Boolean) =>
 
-          val metrics: MetricRegistry = new MetricRegistry()
+          
           val inputFiles = inputPrograms.map(name => new File("../examples_ft/" + name))
           val config = Config(eot, eff, crashes, nodes, inputFiles)
-          val (successes, counterexamples) =
-            SyncFTChecker.check(config, metrics).partition(_.status == RunStatus("success"))
-          // Compute these counts here to ensure that the ephemeral stream is evaluated before
-          // we retrieve the other metrics from the registry
-          val successCount = successes.size
-          val counterexampleCount = counterexamples.size
-          val metricsJson = objectMapper.writeValueAsString(metrics)
-          csvWriter.writeRow(scenario.productIterator.map(_.toString).toSeq ++
-            Seq(successCount, counterexampleCount, metricsJson))
+          checker(config, scenario)
       }
     } finally {
       csvWriter.close()
