@@ -38,7 +38,10 @@ object MollyBuild extends Build {
         "org.ow2.sat4j" % "org.ow2.sat4j.core" % "2.3.5",
         "commons-io" % "commons-io" % "2.4",
         "org.jgrapht" % "jgrapht-core" % "0.9.0",
-        "nl.grons" %% "metrics-scala" % "3.0.5_a2.3"
+        "nl.grons" %% "metrics-scala" % "3.0.5_a2.3",
+        "com.codahale.metrics" % "metrics-json" % "3.0.2",
+        "org.codehaus.jackson" % "jackson-mapper-asl" % "1.9.13",
+        "com.github.tototoshi" %% "scala-csv" % "1.0.0"
       )
     )
   )

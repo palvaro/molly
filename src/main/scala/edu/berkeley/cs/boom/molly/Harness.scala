@@ -3,16 +3,13 @@ package edu.berkeley.cs.boom.molly
 import java.io.File
 import com.typesafe.scalalogging.slf4j.Logging
 import org.scalatest.prop.TableDrivenPropertyChecks.{Table => ScalatestTable}
-import com.codahale.metrics.{MetricRegistry, CsvReporter, ConsoleReporter}
+import com.codahale.metrics.MetricRegistry
 import java.util.concurrent.TimeUnit
-import java.util.Locale
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.codahale.metrics.json.MetricsModule
+import com.github.tototoshi.csv.CSVWriter
 
 object Harness extends Logging {
-
-  val s1 = ScalatestTable(
-    ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
-    (Seq("ack_rb.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false)
-  )
 
   val scenarios = ScalatestTable(
     ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
@@ -61,38 +58,39 @@ object Harness extends Logging {
   )
 
   def main(args: Array[String]) {
-    //scenarios.foreach {case (inputPrograms: Seq[String], eot: Int, eff: Int, nodes: Seq[String], crashes: Int, shouldFindCounterexample: Boolean) =>
-    s1.foreach {case (inputPrograms: Seq[String], eot: Int, eff: Int, nodes: Seq[String], crashes: Int, shouldFindCounterexample: Boolean) =>
+    val objectMapper = new ObjectMapper().registerModule(
+      new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, false))
+    val outputFile = new File("harness-results.csv")
 
+    // For now, treat the results as a mixed of structured and semi-structured data.
+    // If there are specific metrics that we want to be included in the spreadsheet,
+    // we can pull them out and add them as extra columns.  To capture all of the rest
+    // of the metrics, we write them into a JSON-valued field.
+    val csvWriter = CSVWriter.open(outputFile)
+    val header =
+      scenarios.heading.productIterator.toSeq ++ Seq("successes", "counterexamples", "metrics")
+    csvWriter.writeRow(header)
+    try {
+      scenarios.foreach {
+        case scenario @ (inputPrograms: Seq[String], eot: Int, eff: Int, nodes: Seq[String],
+          crashes: Int, shouldFindCounterexample: Boolean) =>
 
-  val metrics: MetricRegistry = new MetricRegistry()
-  val csvreporter = CsvReporter.forRegistry(metrics)
-                                        .formatFor(Locale.US)
-                                        .convertRatesTo(TimeUnit.SECONDS)
-                                        .convertDurationsTo(TimeUnit.MILLISECONDS)
-                                        .build(new File("./metrics/"));
-
-
-  val consolereporter = ConsoleReporter.forRegistry(metrics)
-                                        .convertRatesTo(TimeUnit.SECONDS)
-                                        .convertDurationsTo(TimeUnit.MILLISECONDS)
-                                        .build();
-
-
-
-      //val inputFiles = inputPrograms.map(name => new File(examplesFTPath, name))
-
-      val inputFiles = inputPrograms.map(name => new File("../examples_ft/" + name))
-      val config = Config(eot, eff, crashes, nodes, inputFiles)
-      SyncFTChecker.check(config, metrics)
-      csvreporter.report()
-      //consolereporter.report()
-      
-      
-      //logger.info("OK REPORTED")
+          val metrics: MetricRegistry = new MetricRegistry()
+          val inputFiles = inputPrograms.map(name => new File("../examples_ft/" + name))
+          val config = Config(eot, eff, crashes, nodes, inputFiles)
+          val (successes, counterexamples) =
+            SyncFTChecker.check(config, metrics).partition(_.status == RunStatus("success"))
+          // Compute these counts here to ensure that the ephemeral stream is evaluated before
+          // we retrieve the other metrics from the registry
+          val successCount = successes.size
+          val counterexampleCount = counterexamples.size
+          val metricsJson = objectMapper.writeValueAsString(metrics)
+          csvWriter.writeRow(scenario.productIterator.map(_.toString).toSeq ++
+            Seq(successCount, counterexampleCount, metricsJson))
+      }
+    } finally {
+      csvWriter.close()
     }
-
-      //csvreporter.report()
   }
   
 }
