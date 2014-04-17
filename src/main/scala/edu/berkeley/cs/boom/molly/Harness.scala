@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.codahale.metrics.json.MetricsModule
 import com.github.tototoshi.csv.CSVWriter
+import scala.util.control.Breaks._
 
 object Harness extends Logging {
 
@@ -65,11 +66,15 @@ object Harness extends Logging {
   
   def checker(config: Config, scenario: (Seq[String], Int, Int, Seq[String], Int, Boolean)) {
     val eots = List(5, 10, 15, 20, 25)
-    eots.foreach(e => checker_run(config.copy(eot = e, eff = e-3), scenario))
+    breakable {
+      eots.foreach(e => 
+        if (checker_run(config.copy(eot = e, eff = e-3), scenario))
+          break
+      )
+    }
   }
 
-  def checker_run(config: Config, scenario: (Seq[String], Int, Int, Seq[String], Int, Boolean)) {
-
+  def checker_run(config: Config, scenario: (Seq[String], Int, Int, Seq[String], Int, Boolean)) : Boolean = {
     val tm = System.currentTimeMillis()
     logger.debug(s"ok eot is $config.eot and eff is $config.eff")
     val metrics: MetricRegistry = new MetricRegistry()
@@ -87,6 +92,8 @@ object Harness extends Logging {
 
     csvWriter.writeRow(scenario.copy(_2 = config.eot, _3 = config.eff).productIterator.map(_.toString).toSeq ++
       Seq(successCount, counterexampleCount, failureSpec.grossEstimate, duration, metricsJson))
+
+    return (counterexamples.size > 0)
   }
 
   def main(args: Array[String]) {
