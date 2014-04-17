@@ -70,19 +70,23 @@ object Harness extends Logging {
 
   def checker_run(config: Config, scenario: (Seq[String], Int, Int, Seq[String], Int, Boolean)) {
 
+    val tm = System.currentTimeMillis()
     logger.debug(s"ok eot is $config.eot and eff is $config.eff")
     val metrics: MetricRegistry = new MetricRegistry()
     val (successes, counterexamples) =
       SyncFTChecker.check(config, metrics).partition(_.status == RunStatus("success"))
     // Compute these counts here to ensure that the ephemeral stream is evaluated before
     // we retrieve the other metrics from the registry
+
+    val duration = (System.currentTimeMillis() - tm) / 1000
     val successCount = successes.size
     val counterexampleCount = counterexamples.size
     val metricsJson = objectMapper.writeValueAsString(metrics)
     val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
 
+
     csvWriter.writeRow(scenario.copy(_2 = config.eot, _3 = config.eff).productIterator.map(_.toString).toSeq ++
-      Seq(successCount, counterexampleCount, failureSpec.grossEstimate, metricsJson))
+      Seq(successCount, counterexampleCount, failureSpec.grossEstimate, duration, metricsJson))
   }
 
   def main(args: Array[String]) {
@@ -92,7 +96,7 @@ object Harness extends Logging {
     // of the metrics, we write them into a JSON-valued field.
     //val csvWriter = CSVWriter.open(outputFile)
     val header =
-      scenarios.heading.productIterator.toSeq ++ Seq("successes", "counterexamples", "upper bound", "metrics")
+      scenarios.heading.productIterator.toSeq ++ Seq("successes", "counterexamples", "upper bound", "duration(secs)", "metrics")
     csvWriter.writeRow(header)
     try {
       scenarios.foreach {
