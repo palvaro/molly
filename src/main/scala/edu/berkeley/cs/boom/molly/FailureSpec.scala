@@ -20,9 +20,14 @@ case class FailureSpec(
   import ArithmeticUtils._
 
   def grossEstimate: Long = {
-    val channels = (nodes.size * nodes.size) - nodes.size
-    val lossScenarios = (0 to eff).map(i => binomialCoefficient(eff, i)).sum
-    pow(lossScenarios, channels)
+    // We'll count the failure scenarios of each node, then multiply them to get the total count.
+    // At each time step before the crash, any of the `nodes.size - 1` channels could fail.
+    val singleTimeLosses = pow(2, nodes.size - 1)
+    val crashFree = pow(singleTimeLosses, eff)
+    // Crashed nodes can't send messages:
+    val crashProne = (1 to eot + 1).map { crashTime => pow(singleTimeLosses, Math.min(eff, crashTime - 1)) }.sum
+    // (ways to pick which nodes don't crash)   * (executions of crash-free nodes)        * (executions of crash prone nodes)
+    binomialCoefficient(nodes.size, maxCrashes) * pow(crashFree, nodes.size - maxCrashes) * pow(crashProne, maxCrashes)
   }
 
   def generateClockFacts: Seq[Predicate] = {
