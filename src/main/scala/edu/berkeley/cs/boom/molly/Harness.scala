@@ -20,6 +20,25 @@ object Harness extends Logging {
   val outputFile = new File("harness-results.csv")
   val csvWriter = CSVWriter.open(outputFile)
 
+  val cherries = ScalatestTable(
+    ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
+    (Seq("simplog.ded", "deliv_assert.ded"),      4,      2,     Seq("a", "b", "c"),            0,    true),
+    (Seq("rdlog.ded", "deliv_assert.ded"),      25,      23,     Seq("a", "b", "c"),            0,    true),
+    (Seq("rdlog.ded", "deliv_assert.ded"),      4,      2,     	 Seq("a", "b", "c"),            1,    true),
+    (Seq("replog.ded", "deliv_assert.ded"),      8,      6,     Seq("a", "b", "c"),            1,    true),
+    (Seq("classic_rb.ded", "deliv_assert.ded"),   5,      3,     Seq("a", "b", "c"),            0,    true),
+    (Seq("2pc.ded", "2pc_assert.ded"),      5,      0,     Seq("a", "b", "C", "d"),            1,    true),
+    (Seq("2pc_ctp.ded", "2pc_assert.ded"),        6,      0,     Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("2pc_timeout.ded", "2pc_assert_optimist.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    false),
+    (Seq("3pc.ded", "2pc_assert.ded"),        8,      0,     Seq("a", "b", "C", "d"),       2,    false),
+    (Seq("3pc.ded", "2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
+
+    (Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       1,    true),
+    (Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       0,    false),
+
+    (Seq("ack_rb.ded", "deliv_assert.ded"),       8,      6,     Seq("a", "b", "c"),            1,    false)
+  )
+
   val scenarios = ScalatestTable(
     ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
     (Seq("simplog.ded", "deliv_assert.ded"),      6,      3,     Seq("a", "b", "c"),            0,    true),
@@ -48,8 +67,10 @@ object Harness extends Logging {
     (Seq("2pc_timeout.ded", "2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    true),
 
     // even the collaborative termination protocol has executions that don't decide.   
+/* weird; causing crashes for low values of eot
     (Seq("2pc_ctp.ded", "2pc_assert.ded"),        6,      0,     Seq("a", "b", "C", "d"),       1,    true),
     (Seq("2pc_ctp.ded", "2pc_assert.ded"),        6,      0,     Seq("a", "b", "C", "d"),       2,    true),
+*/
 
     // 3pc (yay?) is "nonblocking" in the synchronous, fail-stop model
     (Seq("3pc.ded", "2pc_assert.ded"),        8,      0,     Seq("a", "b", "C", "d"),       1,    false),
@@ -59,20 +80,23 @@ object Harness extends Logging {
     //(Seq("3pc.ded", "2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
 
     (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       1,    true),
-    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false)
+    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false),
   
     // simulating the kafka bug
-    //(Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       1,    true),
-    //(Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       0,    false)
+    (Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       1,    true),
+    (Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       0,    false)
   )
 
   
   def checker(config: Config, scenario: (Seq[String], Int, Int, Seq[String], Int, Boolean)) {
-    val eots = List(5, 6, 7, 8, 9, 10)
+    val eots = List(4, 5, 6, 7, 8, 9, 10)
     breakable {
       eots.foreach(e => 
-        if (checker_run(config.copy(eot = e, eff = e-3), scenario))
+        if (checker_run(config.copy(eot = e, eff = e-3), scenario)) {
+	  logger.info(s"BREAK! $e, $scenario")
           break
+	
+	}
       )
     }
   }
@@ -82,29 +106,43 @@ object Harness extends Logging {
     val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
     logger.debug(s"ok eot is $config.eot and eff is $config.eff")
     val metrics: MetricRegistry = new MetricRegistry()
-    try { failAfter(Span(500, Seconds)) {
-    val (successes, counterexamples) =
-      SyncFTChecker.check(config, metrics).partition(_.status == RunStatus("success"))
-    // Compute these counts here to ensure that the ephemeral stream is evaluated before
-    // we retrieve the other metrics from the registry
+    //try { failAfter(Span(10, Seconds)) {
 
-    val duration = (System.currentTimeMillis() - tm) / 1000
-    val successCount = successes.size
-    val counterexampleCount = counterexamples.size
-    val metricsJson = objectMapper.writeValueAsString(metrics)
+    try { 
+      failAfter(Span(30, Seconds)) { 	
+        val (successes, counterexamples) =
+          SyncFTChecker.check(config, metrics).partition(_.status == RunStatus("success"))
+        // Compute these counts here to ensure that the ephemeral stream is evaluated before
+        // we retrieve the other metrics from the registry
+
+        val duration = (System.currentTimeMillis() - tm) / 1000
+        val successCount = successes.size
+        val counterexampleCount = counterexamples.size
+        val metricsJson = objectMapper.writeValueAsString(metrics)
 
 
-    csvWriter.writeRow(scenario.copy(_2 = config.eot, _3 = config.eff).productIterator.map(_.toString).toSeq ++
-      Seq(successCount, counterexampleCount, failureSpec.grossEstimate, duration, metricsJson))
-
-    return (counterexamples.size > 0)
-    }
-    } catch {
-      case e: TestFailedDueToTimeoutException => {
         csvWriter.writeRow(scenario.copy(_2 = config.eot, _3 = config.eff).productIterator.map(_.toString).toSeq ++
-          Seq(-1, -1, failureSpec.grossEstimate, 500, null))
-      return true
+          Seq(successCount, counterexampleCount, failureSpec.grossEstimate, duration, metricsJson))
+
+        return (counterexamples.size > 0)
       }
+    } catch {
+        case e: TestFailedDueToTimeoutException => {
+	  logger.warn("TIMEOUT")
+	  csvWriter.writeRow(scenario.copy(_2 = config.eot, _3 = config.eff).productIterator.map(_.toString).toSeq ++
+            Seq(-1, -1, failureSpec.grossEstimate, 500, ""))
+	  return true
+	}
+	case s: java.lang.IllegalStateException => {
+	  logger.warn("Empty model")
+	  csvWriter.writeRow(scenario.copy(_2 = config.eot, _3 = config.eff).productIterator.map(_.toString).toSeq ++
+            Seq(-1, -1, failureSpec.grossEstimate, -1, ""))
+	  return false
+	}
+	case f: Exception => {
+	  logger.warn(s"WAT? $f")
+	  return true
+	}
     }
   }
 
@@ -118,14 +156,16 @@ object Harness extends Logging {
       scenarios.heading.productIterator.toSeq ++ Seq("successes", "counterexamples", "upper bound", "duration(secs)", "metrics")
     csvWriter.writeRow(header)
     try {
-      scenarios.foreach {
+      //scenarios.foreach {
+      cherries.foreach {
         case scenario @ (inputPrograms: Seq[String], eot: Int, eff: Int, nodes: Seq[String],
           crashes: Int, shouldFindCounterexample: Boolean) =>
 
           
           val inputFiles = inputPrograms.map(name => new File("../examples_ft/" + name))
           val config = Config(eot, eff, crashes, nodes, inputFiles)
-          checker(config, scenario)
+          //checker(config, scenario)
+          checker_run(config, scenario)
       }
     } finally {
       csvWriter.close()
