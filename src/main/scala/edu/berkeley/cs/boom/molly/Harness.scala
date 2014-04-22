@@ -21,91 +21,81 @@ object Harness extends Logging {
   val csvWriter = CSVWriter.open(outputFile)
 
   val scenarios = ScalatestTable(
-    ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
-    (Seq("simplog.ded", "deliv_assert.ded"),      6,      3,     Seq("a", "b", "c"),            0,    true),
-    (Seq("rdlog.ded", "deliv_assert.ded"),        6,      3,     Seq("a", "b", "c"),            0,    false),
-    (Seq("rdlog.ded", "deliv_assert.ded"),        6,      3,     Seq("a", "b", "c"),            1,    true),
+    ("Input programs",                                      "nodes",    "crashes",    "should find counterexample"),
+    (Seq("simplog.ded", "deliv_assert.ded"),     Seq("a", "b", "c"),            0,    true),
+    (Seq("rdlog.ded", "deliv_assert.ded"),       Seq("a", "b", "c"),            0,    false),
+    (Seq("rdlog.ded", "deliv_assert.ded"),       Seq("a", "b", "c"),            1,    true),
     // classic reliable broadcast fails in the omission model
-    (Seq("classic_rb.ded", "deliv_assert.ded"),   6,      3,     Seq("a", "b", "c"),            0,    true),
+    (Seq("classic_rb.ded", "deliv_assert.ded"),  Seq("a", "b", "c"),            0,    true),
     // but is robust in the fail-stop model.
-    (Seq("classic_rb.ded", "deliv_assert.ded"),   6,      0,     Seq("a", "b", "c"),            2,    false),
-    (Seq("replog.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            0,    false),
-    (Seq("replog.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
-    (Seq("ack_rb.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
-    (Seq("2pc.ded", "2pc_assert.ded"),            7,      3,     Seq("a", "b", "C", "d"),       0,    false),
-    (Seq("2pc.ded", "2pc_assert.ded"),            6,      3,     Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("classic_rb.ded", "deliv_assert.ded"),  Seq("a", "b", "c"),            2,    false),
+    (Seq("replog.ded", "deliv_assert.ded"),      Seq("a", "b", "c"),            0,    false),
+    (Seq("replog.ded", "deliv_assert.ded"),      Seq("a", "b", "c"),            1,    false),
+    (Seq("ack_rb.ded", "deliv_assert.ded"),      Seq("a", "b", "c"),            1,    false),
+    (Seq("2pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       0,    false),
+    (Seq("2pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       1,    true),
     // naive 2pc has executions that don't decide even if the model is fail-stop.
-    (Seq("2pc.ded", "2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       1,    true),
-    (Seq("2pc.ded", "2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    true),
+    (Seq("2pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("2pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       2,    true),
     // indeed, even if we ignore executions where the coordinator fails:
-    (Seq("2pc.ded", "2pc_assert_optimist.ded"),            6,      0,     Seq("a", "b", "C", "d"),       1,    true),
-    (Seq("2pc.ded", "2pc_assert_optimist.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    true),
+    (Seq("2pc.ded", "2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("2pc.ded", "2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       2,    true),
     // with timeout+abort at the coordinator, we get termination when the coordinator doesn't fail
-    (Seq("2pc_timeout.ded", "2pc_assert_optimist.ded"),            6,      0,     Seq("a", "b", "C", "d"),       1,    false),
-    (Seq("2pc_timeout.ded", "2pc_assert_optimist.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    false),
+    (Seq("2pc_timeout.ded", "2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       1,    false),
+    (Seq("2pc_timeout.ded", "2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       2,    false),
     // but honestly...
-    (Seq("2pc_timeout.ded", "2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       1,    true),
-    (Seq("2pc_timeout.ded", "2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    true),
+    (Seq("2pc_timeout.ded", "2pc_assert.ded"),   Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("2pc_timeout.ded", "2pc_assert.ded"),   Seq("a", "b", "C", "d"),       2,    true),
 
-    // even the collaborative termination protocol has executions that don't decide.   
-    (Seq("2pc_ctp.ded", "2pc_assert.ded"),        6,      0,     Seq("a", "b", "C", "d"),       1,    true),
-    (Seq("2pc_ctp.ded", "2pc_assert.ded"),        6,      0,     Seq("a", "b", "C", "d"),       2,    true),
+    // even the collaborative termination protocol has executions that don't decide.
+    (Seq("2pc_ctp.ded", "2pc_assert.ded"),       Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("2pc_ctp.ded", "2pc_assert.ded"),       Seq("a", "b", "C", "d"),       2,    true),
 
     // 3pc (yay?) is "nonblocking" in the synchronous, fail-stop model
-    (Seq("3pc.ded", "2pc_assert.ded"),        8,      0,     Seq("a", "b", "C", "d"),       1,    false),
-    (Seq("3pc.ded", "2pc_assert.ded"),        8,      0,     Seq("a", "b", "C", "d"),       2,    false),
+    (Seq("3pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       1,    false),
+    (Seq("3pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       2,    false),
 
     // somewhat surprised though that we can't break it's synchronicity assumptions by dropping messages...
     //(Seq("3pc.ded", "2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
 
-    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       1,    true),
-    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false)
-  
+    (Seq("tokens.ded"),                          Seq("a", "b", "c", "d"),       1,    true),
+    (Seq("tokens.ded"),                          Seq("a", "b", "c", "d"),       0,    false)
+
     // simulating the kafka bug
-    //(Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       1,    true),
-    //(Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       0,    false)
+    //(Seq("kafka.ded"),                         Seq("a", "b", "c", "C", "Z"),       1,    true),
+    //(Seq("kafka.ded"),                         Seq("a", "b", "c", "C", "Z"),       0,    false)
   )
 
-  
-  def checker(config: Config, scenario: (Seq[String], Int, Int, Seq[String], Int, Boolean)) {
-    val eots = List(5, 6, 7, 8, 9, 10)
-    breakable {
-      eots.foreach(e => 
-        if (checker_run(config.copy(eot = e, eff = e-3), scenario))
-          break
-      )
-    }
-  }
+  private val TIMEOUT = 500  // in seconds
 
-  def checker_run(config: Config, scenario: (Seq[String], Int, Int, Seq[String], Int, Boolean)) : Boolean = {
+  private def check(crashes: Int, nodes: Seq[String], inputPrograms: Seq[File], eot: Int, eff: Int) = {
     val tm = System.currentTimeMillis()
-    val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
-    logger.debug(s"ok eot is $config.eot and eff is $config.eff")
+    val config = new Config(eot, eff, crashes, nodes, inputPrograms)
+    val failureSpec = FailureSpec(eot, eff, crashes, nodes.toList)
     val metrics: MetricRegistry = new MetricRegistry()
-    try { failAfter(Span(500, Seconds)) {
-    val (successes, counterexamples) =
-      SyncFTChecker.check(config, metrics).partition(_.status == RunStatus("success"))
-    // Compute these counts here to ensure that the ephemeral stream is evaluated before
-    // we retrieve the other metrics from the registry
-
-    val duration = (System.currentTimeMillis() - tm) / 1000
-    val successCount = successes.size
-    val counterexampleCount = counterexamples.size
-    val metricsJson = objectMapper.writeValueAsString(metrics)
-
-
-    csvWriter.writeRow(scenario.copy(_2 = config.eot, _3 = config.eff).productIterator.map(_.toString).toSeq ++
-      Seq(successCount, counterexampleCount, failureSpec.grossEstimate, duration, metricsJson))
-
-    return (counterexamples.size > 0)
-    }
-    } catch {
-      case e: TestFailedDueToTimeoutException => {
-        csvWriter.writeRow(scenario.copy(_2 = config.eot, _3 = config.eff).productIterator.map(_.toString).toSeq ++
-          Seq(-1, -1, failureSpec.grossEstimate, 500, null))
-      return true
+    try {
+      failAfter(Span(TIMEOUT, Seconds)) {
+        var successCount = 0
+        var counterexampleCount = 0
+        var runs = SyncFTChecker.check(config, metrics) // An ephemeral stream
+        while (!runs.isEmpty && counterexampleCount == 0) {  // Stop if we've found a counterexample
+          val result = runs.head.apply()
+          if (result.status == RunStatus("success")) {
+            successCount += 1
+          } else {
+            counterexampleCount += 1
+          }
+          runs = runs.tail()
+        }
+        val duration = (System.currentTimeMillis() - tm) / 1000.0
+        val metricsJson = objectMapper.writeValueAsString(metrics)
+        (eot, eff, successCount, counterexampleCount, failureSpec.grossEstimate, duration, metricsJson)
       }
+    } catch {
+      case _: TestFailedDueToTimeoutException =>
+        (eot, eff, -1, -1, failureSpec.grossEstimate, TIMEOUT, null)
     }
+
   }
 
   def main(args: Array[String]) {
@@ -113,27 +103,27 @@ object Harness extends Logging {
     // If there are specific metrics that we want to be included in the spreadsheet,
     // we can pull them out and add them as extra columns.  To capture all of the rest
     // of the metrics, we write them into a JSON-valued field.
-    //val csvWriter = CSVWriter.open(outputFile)
     val header =
-      scenarios.heading.productIterator.toSeq ++ Seq("successes", "counterexamples", "upper bound", "duration(secs)", "metrics")
+      scenarios.heading.productIterator.toSeq ++
+        Seq("eot", "eff", "successes", "counterexamples", "upper bound", "duration(secs)", "metrics")
     csvWriter.writeRow(header)
     try {
       scenarios.foreach {
-        case scenario @ (inputPrograms: Seq[String], eot: Int, eff: Int, nodes: Seq[String],
-          crashes: Int, shouldFindCounterexample: Boolean) =>
-
-          
+        case scenario @ (inputPrograms: Seq[String], nodes: Seq[String], crashes: Int, shouldFindCounterexample: Boolean) =>
           val inputFiles = inputPrograms.map(name => new File("../examples_ft/" + name))
-          val config = Config(eot, eff, crashes, nodes, inputFiles)
-          checker(config, scenario)
+          // Incrementally increase the EOT and stop if we find a counterexample:
+          val eots = 5 to 10
+          breakable {
+            eots.foreach { eot =>
+              val outcome = check(crashes, nodes, inputFiles, eot, eot - 3)
+              csvWriter.writeRow(scenario.productIterator.toSeq ++ outcome.productIterator.toSeq)
+              if (outcome._4 > 0) // If we found a counterexample
+                break()
+            }
+          }
       }
     } finally {
       csvWriter.close()
     }
   }
-  
 }
-
- 
-
-
