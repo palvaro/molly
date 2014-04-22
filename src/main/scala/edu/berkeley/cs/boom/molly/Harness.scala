@@ -93,7 +93,7 @@ object Harness extends Logging {
       }
     } catch {
       case _: TestFailedDueToTimeoutException =>
-        (eot, eff, -1, -1, failureSpec.grossEstimate, TIMEOUT, null)
+        (eot, eff, -1, -1, failureSpec.grossEstimate, TIMEOUT, "")
     }
 
   }
