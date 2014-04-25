@@ -9,9 +9,10 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.codahale.metrics.json.MetricsModule
 import com.github.tototoshi.csv.CSVWriter
 import scala.util.control.Breaks._
-import org.scalatest.concurrent.Timeouts._
-import org.scalatest.time._
-import org.scalatest.exceptions.TestFailedDueToTimeoutException
+import scala.concurrent.duration._
+import scala.concurrent._
+import ExecutionContext.Implicits.global
+import scala.language.postfixOps
 
 object Harness extends Logging {
 
@@ -96,11 +97,12 @@ object Harness extends Logging {
     val metrics: MetricRegistry = new MetricRegistry()
 
     try {
-      failAfter(Span(TIMEOUT, Seconds)) {
+      val result = future {
         var successCount = 0
         var counterexampleCount = 0
         var runs = SyncFTChecker.check(config, metrics) // An ephemeral stream
-        while (!runs.isEmpty && counterexampleCount == 0) {  // Stop if we've found a counterexample
+        while (!runs.isEmpty && counterexampleCount == 0) {
+          // Stop if we've found a counterexample
           val result = runs.head.apply()
           if (result.status == RunStatus("success")) {
             successCount += 1
@@ -113,8 +115,9 @@ object Harness extends Logging {
         val metricsJson = objectMapper.writeValueAsString(metrics)
         (eot, eff, successCount, counterexampleCount, failureSpec.grossEstimate, duration, metricsJson)
       }
+      Await.result(result, TIMEOUT seconds)
     } catch {
-      case _: TestFailedDueToTimeoutException =>
+      case _: TimeoutException =>
         (eot, eff, -1, -1, failureSpec.grossEstimate, TIMEOUT, "")
     }
 
@@ -134,7 +137,7 @@ object Harness extends Logging {
       	cherries.foreach {
       	  case scenario @ (inputPrograms: Seq[String], eot: Int, eff: Int, nodes: Seq[String],
             crashes: Int, shouldFindCounterexample: Boolean) =>
-	  
+
             val inputFiles = inputPrograms.map(name => new File("../examples_ft/" + name))
 	    val outcome = check(crashes, nodes, inputFiles, eot, eff)
 	    val newHeader = Seq(inputPrograms, nodes, crashes, shouldFindCounterexample)
@@ -154,7 +157,7 @@ object Harness extends Logging {
                   break()
               }
             }
-	}
+        }
       }
     } finally {
       csvWriter.close()
