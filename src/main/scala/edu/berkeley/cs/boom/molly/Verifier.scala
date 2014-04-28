@@ -1,9 +1,7 @@
 package edu.berkeley.cs.boom.molly
 
-import scala.collection.mutable.ListBuffer
 import edu.berkeley.cs.boom.molly.ast.Program
 import edu.berkeley.cs.boom.molly.wrappers.C4Wrapper
-//import edu.berkeley.cs.boom.molly.derivations.Message;
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.derivations.{GoalNode, Message, SATSolver, ProvenanceReader}
 import java.util.concurrent.atomic.AtomicInteger
@@ -47,35 +45,33 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
   def random: EphemeralStream[Run] = {
     val failureFreeRun =
       Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, Nil, Nil)
-    failureFreeRun ##:: doRandom(List(failureFreeRun))
+    failureFreeRun ##:: doRandom
   }
 
-  def doRandom(done: List[Run]): EphemeralStream[Run] = {
-    val run = someRandomRun(done) 
-    logger.warn("run info is $run.status")
+  def doRandom: EphemeralStream[Run] = {
+    val run = someRandomRun
+    logger.warn(s"run info is ${run.status}")
     if (run.status == RunStatus("failure")) {
-      //EphemeralStream.emptyEphemeralStream
-      //Nil ##:: run
       EphemeralStream(run)
     } else {
-      run ##:: doRandom(List(run) ++ done)
+      run ##:: doRandom
     }
   }
 
-  def someRandomRun(done: List[Run]): Run = {
+  def someRandomRun: Run = {
     // be smarter
     val crashes = for (
       crash <- scala.util.Random.shuffle(originalSpec.nodes).take(originalSpec.maxCrashes);
       time <- scala.util.Random.shuffle(1 to originalSpec.eot).take(1)
     ) yield {
-      CrashFailure(crash, time);
+      CrashFailure(crash, time)
     }
 
     val messageLoss = for (
       from <- originalSpec.nodes;
       to <- originalSpec.nodes;
-      time <- 1 to originalSpec.eff-1;
-      if (rando.nextInt % originalSpec.eff) == 1;
+      time <- 1 to originalSpec.eff - 1
+      if (rando.nextInt % originalSpec.eff) == 1
       if from != to
     ) yield {
       MessageLoss(from, to, time)
@@ -85,7 +81,6 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
     logger.warn(s"loss $messageLoss") 
     val fspec = originalSpec.copy(crashes = crashes.toSet, omissions = messageLoss.toSet)
     val (run, potentialCounterexamples) = runFailureSpec(fspec)
-
     run
   }
       
