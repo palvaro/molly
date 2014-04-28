@@ -52,7 +52,14 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
 
   def doRandom(done: List[Run]): EphemeralStream[Run] = {
     val run = someRandomRun(done) 
-    run ##:: doRandom(List(run) ++ done)
+    logger.warn("run info is $run.status")
+    if (run.status == RunStatus("failure")) {
+      //EphemeralStream.emptyEphemeralStream
+      //Nil ##:: run
+      EphemeralStream(run)
+    } else {
+      run ##:: doRandom(List(run) ++ done)
+    }
   }
 
   def someRandomRun(done: List[Run]): Run = {
@@ -78,9 +85,8 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
     logger.warn(s"loss $messageLoss") 
     val fspec = originalSpec.copy(crashes = crashes.toSet, omissions = messageLoss.toSet)
     val (run, potentialCounterexamples) = runFailureSpec(fspec)
-    alreadyExplored.add(failureSpec)
-    logger.warn(s"PCs: $potentialCounterexamples")
-    Run(runId.getAndIncrement, RunStatus("success"), fspec, failureFreeUltimateModel, Nil, Nil)
+
+    run
   }
       
 
@@ -104,7 +110,12 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
       assert (!alreadyExplored.contains(failureSpec))
       val (run, potentialCounterexamples) = runFailureSpec(failureSpec)
       alreadyExplored.add(failureSpec)
-      run ##:: doVerify(queueToVerify ++ potentialCounterexamples)
+
+      if (run.status == RunStatus("failure")) {
+        EphemeralStream(run)
+      } else {
+        run ##:: doVerify(queueToVerify ++ potentialCounterexamples)
+      }
     }
   }
 
@@ -135,6 +146,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
       (run, potentialCounterexamples)
     } else {
       logger.warn("Found counterexample: " + failureSpec)
+      logger.warn("Run was " + messages)
       val run =
         Run(runId.getAndIncrement, RunStatus("failure"), failureSpec, model, messages, provenance)
       (run, Set.empty)
