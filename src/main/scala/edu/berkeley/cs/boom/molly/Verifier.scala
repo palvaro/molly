@@ -48,7 +48,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
     failureFreeRun ##:: doRandom
   }
 
-  def doRandom: EphemeralStream[Run] = {
+  private def doRandom: EphemeralStream[Run] = {
     val run = someRandomRun
     logger.warn(s"run info is ${run.status}")
     if (run.status == RunStatus("failure")) {
@@ -58,7 +58,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
     }
   }
 
-  def someRandomRun: Run = {
+  private def someRandomRun: Run = {
     // be smarter
     val crashes = for (
       crash <- scala.util.Random.shuffle(originalSpec.nodes).take(originalSpec.maxCrashes);
@@ -77,11 +77,16 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
       MessageLoss(from, to, time)
     }
 
-    logger.warn(s"crashnodes $crashes") 
-    logger.warn(s"loss $messageLoss") 
-    val fspec = originalSpec.copy(crashes = crashes.toSet, omissions = messageLoss.toSet)
-    val (run, potentialCounterexamples) = runFailureSpec(fspec)
-    run
+    logger.warn(s"Testing with crashes $crashes and losses $messageLoss")
+    val randomSpec = originalSpec.copy(crashes = crashes.toSet, omissions = messageLoss.toSet)
+    val failProgram = DedalusTyper.inferTypes(randomSpec.addClockFacts(program))
+    val model = new C4Wrapper("with_errors", failProgram).run
+    if (isGood(model)) {
+      Run(runId.getAndIncrement, RunStatus("success"), randomSpec, model, Nil, Nil)
+    } else {
+      logger.warn("Found counterexample: " + randomSpec)
+      Run(runId.getAndIncrement, RunStatus("failure"), randomSpec, model, Nil, Nil)
+    }
   }
       
 
@@ -140,8 +145,6 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
         Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model, messages, provenance)
       (run, potentialCounterexamples)
     } else {
-      logger.warn("Found counterexample: " + failureSpec)
-      logger.warn("Run was " + messages)
       val run =
         Run(runId.getAndIncrement, RunStatus("failure"), failureSpec, model, messages, provenance)
       (run, Set.empty)

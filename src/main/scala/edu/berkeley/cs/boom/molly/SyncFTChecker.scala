@@ -18,6 +18,7 @@ case class Config(
   crashes: Int = 0,
   nodes: Seq[String] = Seq(),
   inputPrograms: Seq[File] = Seq(),
+  strategy: String = "sat",
   useSymmetry: Boolean = false,
   generateProvenanceDiagrams: Boolean = false
 )
@@ -29,6 +30,7 @@ object SyncFTChecker extends Logging {
     opt[Int]('f', "EFF") text "end of finite failures (default 2)" action { (x, c) => c.copy(eff = x)}
     opt[Int]('c', "crashes") text "crash failures (default 0)" action { (x, c) => c.copy(crashes = x)}
     opt[String]('N', "nodes") text "a comma-separated list of nodes (required)" required() action { (x, c) => c.copy(nodes = x.split(','))}
+    opt[String]("strategy") text "the search strategy ('sat' or 'random')" action { (x, c) => c.copy(strategy = x)} validate { x => if (x != "sat" && x != "random") failure("strategy should be 'sat' or 'random'") else success }
     opt[Unit]("use-symmetry") text "use symmetry to skip equivalent failure scenarios" action { (x, c) => c.copy(useSymmetry = true) }
     opt[Unit]("prov-diagrams") text "generate provenance diagrams for each execution" action { (x, c) => c.copy(generateProvenanceDiagrams = true) }
     arg[File]("<file>...") unbounded() minOccurs 1 text "Dedalus files" action { (x, c) => c.copy(inputPrograms = c.inputPrograms :+ x)}
@@ -41,9 +43,11 @@ object SyncFTChecker extends Logging {
     val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
     val verifier = new Verifier(failureSpec, program, useSymmetry = config.useSymmetry)(metrics)
     logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
-    verifier.verify
-    // this ain't good.
-    //verifier.random
+    config.strategy match {
+      case "sat" => verifier.verify
+      case "random" => verifier.random
+      case s => throw new IllegalArgumentException(s"unknown strategy $s")
+    }
   }
 
   def main(args: Array[String]) {
