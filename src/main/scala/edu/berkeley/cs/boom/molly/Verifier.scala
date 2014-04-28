@@ -59,10 +59,10 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
   }
 
   private def someRandomRun: Run = {
-    // be smarter
+    val numCrashes = rando.nextInt(originalSpec.maxCrashes + 1)
     val crashes = for (
-      crash <- scala.util.Random.shuffle(originalSpec.nodes).take(originalSpec.maxCrashes);
-      time <- scala.util.Random.shuffle(1 to originalSpec.eot).take(1)
+      crash <- rando.shuffle(originalSpec.nodes).take(numCrashes);
+      time = 1 + rando.nextInt(originalSpec.eot)
     ) yield {
       CrashFailure(crash, time)
     }
