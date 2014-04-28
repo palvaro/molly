@@ -50,6 +50,9 @@ class FailureSpecSuite extends FunSpec with Matchers {
         // So 11 ** 2 = 121 possible failure scenarios.
         FailureSpec(3, 2, 2, List("a", "b")).grossEstimate should be (121)
       }
+      it("shouldn't overflow and estimate zero scenarios") {
+        FailureSpec(6, 4, 1, List("a", "b", "c", "C", "Z")).grossEstimate should not be (0)
+      }
     }
   }
 }
