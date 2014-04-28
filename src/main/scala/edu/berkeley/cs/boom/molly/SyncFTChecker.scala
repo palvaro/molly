@@ -42,6 +42,8 @@ object SyncFTChecker extends Logging {
     val verifier = new Verifier(failureSpec, program, useSymmetry = config.useSymmetry)(metrics)
     logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
     verifier.verify
+    // this ain't good.
+    //verifier.random
   }
 
   def main(args: Array[String]) {
