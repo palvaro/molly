@@ -20,7 +20,8 @@ case class Config(
   inputPrograms: Seq[File] = Seq(),
   strategy: String = "sat",
   useSymmetry: Boolean = false,
-  generateProvenanceDiagrams: Boolean = false
+  generateProvenanceDiagrams: Boolean = false,
+  maxRuns: Int = Int.MaxValue
 )
 
 object SyncFTChecker extends Logging {
