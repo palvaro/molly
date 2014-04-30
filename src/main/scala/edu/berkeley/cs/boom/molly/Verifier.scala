@@ -114,7 +114,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
       val failureSpec = unexplored.next()
       assert (!alreadyExplored.contains(failureSpec))
       val (run, potentialCounterexamples) = runFailureSpec(failureSpec)
-      alreadyExplored.add(failureSpec)
+      alreadyExplored += failureSpec
 
       if (run.status == RunStatus("failure")) {
         EphemeralStream(run)

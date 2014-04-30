@@ -36,10 +36,13 @@ object SATSolver extends Logging {
     val firstMessageSendTimes =
       messages.groupBy(_.from).mapValues(_.minBy(_.sendTime).sendTime)
     val models = goals.flatMap { goal => solve(failureSpec, goal, firstMessageSendTimes, seed) }.toSet
-    logger.info(s"SAT problem has ${models.size} solutions:\n${models.map(_.toString()).mkString("\n")}")
+    logger.info(s"SAT problem has ${models.size} solutions")
+    logger.debug(s"SAT solutions are:\n${models.map(_.toString()).mkString("\n")}")
     def isSubset[T](set: Set[T], superset: Set[T]): Boolean = set.forall(e => superset.contains(e))
     val minimalModels = models.filterNot { m => models.exists(m2 => m != m2 && isSubset(m2, m) )}
-    logger.info(s"Minimal models are: \n${minimalModels.map(_.toString()).mkString("\n")}")
+    logger.info(s"SAT problem has ${minimalModels.size} minimal solutions")
+    logger.debug(s"Minimal SAT solutions are:\n${models.map(_.toString()).mkString("\n")}")
+
     minimalModels.flatMap { vars =>
       val crashes = vars.collect { case cf: CrashFailure => cf }
       // If the seed contained a message loss, then it's possible that the SAT solver found

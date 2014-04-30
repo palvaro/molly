@@ -10,18 +10,20 @@ import nl.grons.metrics.scala.InstrumentedBuilder
 class SymmetryAwareSet(symmetryChecker: SymmetryChecker)(implicit val metricRegistry: MetricRegistry)
   extends mutable.Set[FailureSpec] with Logging with InstrumentedBuilder {
 
-  private type SpecHash = (Set[(Int, Int)], Set[(Int, Int)])
+  private type SpecHash = (Set[(Int, Int)], Set[(Int, Int)], Set[Int])
   private val backingMap = mutable.HashMap[SpecHash, mutable.Set[FailureSpec]]()
   private val symmetricScenariosSkipped = metrics.counter("symmetric-scenarios-skipped")
 
   /**
    * To avoid all-pairs comparisons, we partition the cache based on the number of
-   * crash failures and message omissions at different timesteps:
+   * crash failures and message omissions at different timesteps.  As in hash tables,
+   * we want few entries per bucket.
    */
   private def hashSpec(f: FailureSpec): SpecHash = {
     val crashesByTime = f.crashes.seq.map(c => c.time).groupBy(identity).mapValues(_.size).toSet
     val omissionsByTime = f.omissions.seq.map(_.time).groupBy(identity).mapValues(_.size).toSet
-    (crashesByTime, omissionsByTime)
+    val omissionPairCounts = f.omissions.groupBy(o => (o.from, o.to)).values.map(_.size).toSet
+    (crashesByTime, omissionsByTime, omissionPairCounts)
   }
 
   def contains(f: FailureSpec): Boolean = {
@@ -31,12 +33,13 @@ class SymmetryAwareSet(symmetryChecker: SymmetryChecker)(implicit val metricRegi
       logger.debug(s"No candidates for symmetry for $f")
       false
     } else {
-      logger.debug(s"Found ${possibleMatches.get.size} possible symmetric scenarios for $f:\n${possibleMatches.get.map(_.toString).mkString("\n")}")
+      logger.info(s"Found ${possibleMatches.get.size} possible symmetric scenarios for $f.")
+      logger.debug(s"Possible symmetries are: \n${possibleMatches.get.map(_.toString).mkString("\n")}")
       for (cachedSpec <- possibleMatches.get) {
         if (cachedSpec == f) {
           return true
         } else if (symmetryChecker.areEquivalentForEDB(f, cachedSpec)) {
-          logger.debug(s"Found scenario $cachedSpec that is symmetric to $f")
+          logger.info(s"Found scenario $cachedSpec that is symmetric to $f")
           symmetricScenariosSkipped.inc()
           return true
         }
