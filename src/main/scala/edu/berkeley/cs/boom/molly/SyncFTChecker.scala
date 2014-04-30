@@ -21,6 +21,7 @@ case class Config(
   strategy: String = "sat",
   useSymmetry: Boolean = false,
   generateProvenanceDiagrams: Boolean = false,
+  disableDotRendering: Boolean = false,
   maxRuns: Int = Int.MaxValue
 )
 
@@ -34,6 +35,7 @@ object SyncFTChecker extends Logging {
     opt[String]("strategy") text "the search strategy ('sat' or 'random')" action { (x, c) => c.copy(strategy = x)} validate { x => if (x != "sat" && x != "random") failure("strategy should be 'sat' or 'random'") else success }
     opt[Unit]("use-symmetry") text "use symmetry to skip equivalent failure scenarios" action { (x, c) => c.copy(useSymmetry = true) }
     opt[Unit]("prov-diagrams") text "generate provenance diagrams for each execution" action { (x, c) => c.copy(generateProvenanceDiagrams = true) }
+    opt[Unit]("disable-dot-rendering") text "disable automatic rendering of `dot` diagrams" action { (x, c) => c.copy(disableDotRendering = true) }
     arg[File]("<file>...") unbounded() minOccurs 1 text "Dedalus files" action { (x, c) => c.copy(inputPrograms = c.inputPrograms :+ x)}
   }
 
@@ -62,7 +64,8 @@ object SyncFTChecker extends Logging {
     parser.parse(args, Config()) map { config =>
       val results = check(config, metrics)
       // TODO: name the output directory after the input filename and failure spec.
-      HTMLWriter.write(new File("output"), Nil, results, config.generateProvenanceDiagrams)
+      HTMLWriter.write(new File("output"), Nil, results, config.generateProvenanceDiagrams,
+        config.disableDotRendering)
       metricsReporter.report()  // This appears after the HTML writing due to laziness
     } getOrElse {
       // Error messages

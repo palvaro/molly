@@ -40,7 +40,7 @@ object HTMLWriter {
   }
 
   def write(outputDirectory: File, originalPrograms: List[File], runs: EphemeralStream[Run],
-            generateProvenanceDiagrams: Boolean) = {
+            generateProvenanceDiagrams: Boolean, disableDotRendering: Boolean = false) = {
     outputDirectory.mkdirs()
     require (outputDirectory.isDirectory)
     copyTemplateFiles(outputDirectory)
@@ -54,11 +54,14 @@ object HTMLWriter {
       if (!first) runsFile.print(",\n")
       runsFile.print(run.asJson.toString())
       first = false
-      writeGraphviz(SpacetimeDiagramGenerator.generate(run.failureSpec, run.messages),
-        outputDirectory, s"run_${run.iteration}_spacetime") |> executor.submit
+      val renderSpacetime = writeGraphviz(SpacetimeDiagramGenerator.generate(run.failureSpec, run.messages),
+        outputDirectory, s"run_${run.iteration}_spacetime")
+      if (!disableDotRendering) executor.submit(renderSpacetime)
       if (generateProvenanceDiagrams) {
-        writeGraphviz(ProvenanceDiagramGenerator.generate(run.provenance),
-          outputDirectory, s"run_${run.iteration}_provenance") |> executor.submit
+        val renderProv = writeGraphviz(ProvenanceDiagramGenerator.generate(run.provenance),
+          outputDirectory, s"run_${run.iteration}_provenance")
+        if (!disableDotRendering) executor.submit(renderProv)
+
       }
     }
     runsFile.print("\n]")
