@@ -40,28 +40,41 @@ class SymmetryChecker(program: Program, nodes: List[String]) extends Logging {
     }.flatten.toSet
   }
 
-  val possiblySymmetricNodes: List[String] = {
+  private val possiblySymmetricBasedOnRules: List[String] = {
     (nodes.toSet -- locationLiteralsThatAppearInRules).toList
   }
 
-  if (possiblySymmetricNodes.isEmpty) {
+  if (possiblySymmetricBasedOnRules.isEmpty) {
     logger.warn("No candidates for symmetry due to location literals in rules")
   } else {
-    logger.debug(s"Candidates for symmetry are {${possiblySymmetricNodes.mkString(", ")}}")
+    logger.debug(s"Candidates for symmetry are {${possiblySymmetricBasedOnRules.mkString(", ")}}")
   }
 
-  // TODO: it's necessary, but not sufficient, that the symmetries are unifiers of the EDBs
-  // without the clock facts.  So, we can pre-compute a set of symmetries by looking at the
-  // fixed portion of the EDB, and then we only need to worry about symmetry of the clocks.
+  // It's necessary, but not sufficient, that the symmetries are unifiers of the EDBs minus the
+  // clock and crash facts.  So, we pre-compute a set of symmetries for the fixed portion of the
+  // EDB, and then we only need to check symmetry of the clock and crash relations once we're
+  // comparing two failure specs.
+  val possiblySymmetricForStableEDB: Seq[Map[String, String]] = {
+    // The `drop` here is so that we skip the identity mapping:
+    val remappings = possiblySymmetricBasedOnRules.permutations.drop(1).map { p =>
+      possiblySymmetricBasedOnRules.zip(p).toMap }
+    val edb = program.facts.toSet
+    remappings.filter { m => mapLocations(edb, typesForTable, m) == edb }.toSeq
+  }
+
+  if (possiblySymmetricForStableEDB.isEmpty) {
+    logger.debug(s"None of the candidates provide stable EDB symmetry")
+  } else {
+    logger.debug(s"Candidates that provide stable EDB symmetry are {${possiblySymmetricForStableEDB.mkString(", ")}}")
+  }
 
   def areEquivalentForEDB(a: FailureSpec, b: FailureSpec): Boolean = {
-    if (possiblySymmetricNodes.isEmpty) return false
+    if (possiblySymmetricForStableEDB.isEmpty) return false
     require (a.nodes == nodes && b.nodes == nodes)
     if (a == b) return true
-    val aEDB: EDB = (program.facts ++ a.generateClockFacts).toSet
-    val bEDB: EDB = (program.facts ++ b.generateClockFacts).toSet
-    val remappings = possiblySymmetricNodes.permutations.map { p => a.nodes.zip(p).toMap }
-    remappings.exists { m => mapLocations(aEDB, typesForTable, m) == bEDB }
+    val aEDB: EDB = a.generateClockFacts.toSet
+    val bEDB: EDB = b.generateClockFacts.toSet
+    possiblySymmetricForStableEDB.exists { m => mapLocations(aEDB, typesForTable, m) == bEDB }
   }
 
   /**
