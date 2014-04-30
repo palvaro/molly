@@ -4,9 +4,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.ast.{Predicate, Program, StringLiteral}
 import edu.berkeley.cs.boom.molly.{DedalusTyper, FailureSpec}
 
-
 /**
- * Functions for deciding whether two failure scenarios are equivalent.
+ * Decides whether two failure scenarios are equivalent.
  *
  * This solves the following decision problem:
  *
@@ -17,37 +16,51 @@ import edu.berkeley.cs.boom.molly.{DedalusTyper, FailureSpec}
  * In our case, we only consider isomorphisms that change the values of location-typed attributes
  * in the EDB.
  */
-object SymmetryChecker extends Logging {
+class SymmetryChecker(program: Program, nodes: List[String]) extends Logging {
 
   type EDB = Set[Predicate]
   type TableTypes = Map[String, List[String]]
 
-  def locationLiteralsOnlyOccurInEDB(program: Program, nodes: List[String]): Boolean = {
+  private val typesForTable: TableTypes = {
     val fs = FailureSpec(1, 0, 0, nodes)  // TODO: shouldn't have to add dummy clocks to typecheck
-    val typesForTable: TableTypes = {
-      val tables = DedalusTyper.inferTypes(fs.addClockFacts(program)).tables
-      tables.map { t => (t.name, t.types)}.toMap
-    }
-    val predicates = program.rules.flatMap(_.bodyPredicates)
-    predicates.forall { case pred @ Predicate(table, cols, _, _)  =>
-      val colTypes = typesForTable(table)
-      pred.cols.zip(colTypes).forall {
-        case (StringLiteral(_), DedalusTyper.LOCATION) => false
-        case _ => true
-      }
-    }
+    val tables = DedalusTyper.inferTypes(fs.addClockFacts(program)).tables
+    tables.map { t => (t.name, t.types)}.toMap
   }
 
-  def areEquivalentForEDB(program: Program)(a: FailureSpec, b: FailureSpec): Boolean = {
-    require (a.nodes == b.nodes)
+  val locationLiteralsThatAppearInRules: Set[String] = {
+    val predicates = program.rules.flatMap(_.bodyPredicates).filter(_.tableName != "clock")
+    predicates.collect { case pred@Predicate(table, cols, _, _) =>
+      val colTypes = typesForTable(table)
+      pred.cols.zip(colTypes).collect {
+        case (StringLiteral(l), DedalusTyper.LOCATION) => {
+          logger.debug(s"Location literal '$l' appears in rule defining '$table'")
+          l
+        }
+      }
+    }.flatten.toSet
+  }
+
+  val possiblySymmetricNodes: List[String] = {
+    (nodes.toSet -- locationLiteralsThatAppearInRules).toList
+  }
+
+  if (possiblySymmetricNodes.isEmpty) {
+    logger.warn("No candidates for symmetry due to location literals in rules")
+  } else {
+    logger.debug(s"Candidates for symmetry are {${possiblySymmetricNodes.mkString(", ")}}")
+  }
+
+  // TODO: it's necessary, but not sufficient, that the symmetries are unifiers of the EDBs
+  // without the clock facts.  So, we can pre-compute a set of symmetries by looking at the
+  // fixed portion of the EDB, and then we only need to worry about symmetry of the clocks.
+
+  def areEquivalentForEDB(a: FailureSpec, b: FailureSpec): Boolean = {
+    if (possiblySymmetricNodes.isEmpty) return false
+    require (a.nodes == nodes && b.nodes == nodes)
     if (a == b) return true
     val aEDB: EDB = (program.facts ++ a.generateClockFacts).toSet
     val bEDB: EDB = (program.facts ++ b.generateClockFacts).toSet
-    val typesForTable: TableTypes = {
-      val tables = DedalusTyper.inferTypes(program.copy(facts = aEDB.toList)).tables
-      tables.map { t => (t.name, t.types)}.toMap
-    }
-    val remappings = a.nodes.permutations.map { p => a.nodes.zip(p).toMap }
+    val remappings = possiblySymmetricNodes.permutations.map { p => a.nodes.zip(p).toMap }
     remappings.exists { m => mapLocations(aEDB, typesForTable, m) == bEDB }
   }
 
@@ -59,7 +72,7 @@ object SymmetryChecker extends Logging {
     edb.map { case fact @ Predicate(table, cols, _, _) =>
       val colTypes = typesForTable(table)
       val newCols = cols.zip(colTypes).map {
-        case (StringLiteral(loc), DedalusTyper.LOCATION) => StringLiteral(f(loc))
+        case (StringLiteral(loc), DedalusTyper.LOCATION) if f.isDefinedAt(loc) => StringLiteral(f(loc))
         case (c, _) => c
       }
       fact.copy(cols = newCols)

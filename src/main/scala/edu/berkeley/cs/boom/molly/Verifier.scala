@@ -11,6 +11,7 @@ import nl.grons.metrics.scala.InstrumentedBuilder
 import scalaz._
 import scala.collection.mutable
 import edu.berkeley.cs.boom.molly.derivations.SATSolver.{MessageLoss, CrashFailure}
+import edu.berkeley.cs.boom.molly.symmetry.{SymmetryChecker, SymmetryAwareSet}
 
 case class RunStatus(underlying: String) extends AnyVal
 case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, model: UltimateModel,
@@ -39,8 +40,12 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
     logger.debug(s"Failure-free 'good' is\n$failureFreeGood")
   }
 
-  // TODO: re-enable the symmetry analysis
-  private val alreadyExplored = mutable.HashSet[FailureSpec]()
+  private val alreadyExplored: mutable.Set[FailureSpec] = if (useSymmetry) {
+    val symmetryChecker = new SymmetryChecker(program, failureFreeSpec.nodes)
+    new SymmetryAwareSet(symmetryChecker)
+  } else {
+    mutable.HashSet[FailureSpec]()
+  }
 
   def random: EphemeralStream[Run] = {
     val failureFreeRun =

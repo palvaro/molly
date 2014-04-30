@@ -86,7 +86,9 @@ object DedalusTyper {
         (colRefToMinColRef.find(("crash", 2)), INT),
         (colRefToMinColRef.find(("crash", 3)), INT),
         (colRefToMinColRef.find(("clock", 0)), LOCATION),
-        (colRefToMinColRef.find(("clock", 1)), LOCATION)
+        (colRefToMinColRef.find(("clock", 1)), LOCATION),
+        (colRefToMinColRef.find(("clock", 2)), INT),
+        (colRefToMinColRef.find(("clock", 3)), INT)
       )
       val inferredFromPredicates = for (
         pred <- allPredicates;
@@ -111,10 +113,10 @@ object DedalusTyper {
       assert(colCounts.size == 1,
         s"Predicate ${predicates.head.tableName} used with inconsistent number of columns")
       colCounts.head
-    }
+    } + ("clock" -> 4) + ("crash" -> 4)
 
     // Assign types to each group of columns:
-    val tableNames = allPredicates.map(_.tableName).toSet
+    val tableNames = allPredicates.map(_.tableName).toSet  ++ Set("crash", "clock")
     val tables = tableNames.map { tableName =>
       val numCols = numColsInTable(tableName)
       val colTypes = (0 to numCols - 1).map { colNum =>
