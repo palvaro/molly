@@ -2,7 +2,7 @@ package edu.berkeley.cs.boom.molly.paperexperiments
 
 import java.io.File
 import com.github.tototoshi.csv.CSVWriter
-import edu.berkeley.cs.boom.molly.{FailureSpec, SyncFTChecker, Config}
+import edu.berkeley.cs.boom.molly.{RunStatus, FailureSpec, SyncFTChecker, Config}
 import com.codahale.metrics.MetricRegistry
 
 /**
@@ -13,8 +13,8 @@ object TableOfCorrectPrograms {
     // ("Input programs", "eot", "eff", "crashes", "nodes")
     (Seq("rdlog.ded", "deliv_assert.ded"),    25, 23, 0, Seq("a", "b", "c")), // AKA retry-deliv
     (Seq("replog.ded", "deliv_assert.ded"),    8,  6, 1, Seq("a", "b", "c")),  // AKA redun-deliv
-    (Seq("ack_rb.ded", "2pc_assert.ded"),      8,  6, 1, Seq("a", "b", "c"))  // AKA ack-deliv
-    //(Seq("paxos_synod.ded"),                   8,  3, 1, Seq("a", "b", "c"))  // TODO: Crashes with typechecking error
+    (Seq("ack_rb.ded", "deliv_assert.ded"),    8,  6, 1, Seq("a", "b", "c")),  // AKA ack-deliv
+    (Seq("paxos_synod.ded"),                   8,  3, 1, Seq("a", "b", "c"))
   )
 
   /**
@@ -31,6 +31,7 @@ object TableOfCorrectPrograms {
     var runs = SyncFTChecker.check(config, metrics) // An ephemeral stream
     while (!runs.isEmpty) {
       runsCount += 1
+      assert (runs.head().status == RunStatus("success"))
       runs = runs.tail()
     }
     val duration = (System.currentTimeMillis() - startTime) / 1000.0
