@@ -11,6 +11,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
 import com.codahale.metrics.MetricRegistry
 import nl.grons.metrics.scala.MetricBuilder
+import scala.annotation.tailrec
 
 object SATSolver extends Logging {
   sealed trait SATVariable
@@ -38,8 +39,29 @@ object SATSolver extends Logging {
     val models = goals.flatMap { goal => solve(failureSpec, goal, firstMessageSendTimes, seed) }.toSet
     logger.info(s"SAT problem has ${models.size} solutions")
     logger.debug(s"SAT solutions are:\n${models.map(_.toString()).mkString("\n")}")
-    def isSubset[T](set: Set[T], superset: Set[T]): Boolean = set.forall(e => superset.contains(e))
-    val minimalModels = models.filterNot { m => models.exists(m2 => m != m2 && isSubset(m2, m) )}
+    // Keep only the minimal models by excluding models that are supersets of other models.
+    // The naive approach is O(N^2).
+    // There are two simple optimizations that help:
+    //    - A model can be a superset of MANY smaller models, so exclude it as soon as
+    //      we find the first subset.
+    //    - A model can only be a superset of smaller models, so group the models by size.
+    def isSuperset[T](superset: Set[T], set: Set[T]): Boolean = set.forall(e => superset.contains(e))
+    val modelsBySize = models.groupBy(_.size).toSeq.sortBy(- _._1) // minus sign -> descending sizes
+    logger.debug(s"Non minimal models by size: ${modelsBySize.map(x => (x._1, x._2.size))}")
+    @tailrec
+    def removeSupersets(modelsBySize: Seq[(Int, Set[Set[SATVariable]])],
+                        accum: Seq[Set[SATVariable]] = Seq.empty): Seq[Set[SATVariable]] = {
+      if (modelsBySize.isEmpty) {
+        accum
+      } else {
+        val smallerModels: Seq[Set[SATVariable]] = modelsBySize.tail.map(_._2).flatten
+        val minimalModels = modelsBySize.head._2.toSeq.filterNot {
+          sup => smallerModels.exists(sub => isSuperset(sup, sub))
+        }
+        removeSupersets(modelsBySize.tail, minimalModels ++ accum)
+      }
+    }
+    val minimalModels = removeSupersets(modelsBySize)
     logger.info(s"SAT problem has ${minimalModels.size} minimal solutions")
     logger.debug(s"Minimal SAT solutions are:\n${models.map(_.toString()).mkString("\n")}")
 
@@ -59,7 +81,7 @@ object SATSolver extends Logging {
       } else {
         Some(failureSpec.copy (crashes = crashes, omissions = omissions))
       }
-    }
+    }.toSet
   }
 
   private def solve(failureSpec: FailureSpec, goal: GoalNode,
