@@ -56,11 +56,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
   private def doRandom: EphemeralStream[Run] = {
     val run = someRandomRun
     logger.warn(s"run info is ${run.status}")
-    if (run.status == RunStatus("failure")) {
-      EphemeralStream(run)
-    } else {
-      run ##:: doRandom
-    }
+    run ##:: doRandom
   }
 
   private def someRandomRun: Run = {
@@ -115,12 +111,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
       assert (!alreadyExplored.contains(failureSpec))
       val (run, potentialCounterexamples) = runFailureSpec(failureSpec)
       alreadyExplored += failureSpec
-
-      if (run.status == RunStatus("failure")) {
-        EphemeralStream(run)
-      } else {
-        run ##:: doVerify(queueToVerify ++ potentialCounterexamples)
-      }
+      run ##:: doVerify(queueToVerify ++ potentialCounterexamples)
     }
   }
 

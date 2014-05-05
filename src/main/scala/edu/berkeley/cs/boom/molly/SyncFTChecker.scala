@@ -22,6 +22,7 @@ case class Config(
   useSymmetry: Boolean = false,
   generateProvenanceDiagrams: Boolean = false,
   disableDotRendering: Boolean = false,
+  findAllCounterexamples: Boolean = false,
   maxRuns: Int = Int.MaxValue
 )
 
@@ -36,7 +37,24 @@ object SyncFTChecker extends Logging {
     opt[Unit]("use-symmetry") text "use symmetry to skip equivalent failure scenarios" action { (x, c) => c.copy(useSymmetry = true) }
     opt[Unit]("prov-diagrams") text "generate provenance diagrams for each execution" action { (x, c) => c.copy(generateProvenanceDiagrams = true) }
     opt[Unit]("disable-dot-rendering") text "disable automatic rendering of `dot` diagrams" action { (x, c) => c.copy(disableDotRendering = true) }
+    opt[Unit]("find-all-counterexamples") text "continue after finding the first counterexample" action { (x, c) => c.copy(findAllCounterexamples = true) }
     arg[File]("<file>...") unbounded() minOccurs 1 text "Dedalus files" action { (x, c) => c.copy(inputPrograms = c.inputPrograms :+ x)}
+  }
+
+  /**
+   * Like `takeWhile`, but also takes the first element NOT satisfying the predicate.
+   */
+  private def takeUpTo[T](stream: EphemeralStream[T], pred: T => Boolean): EphemeralStream[T] = {
+    if (stream.isEmpty) {
+      stream
+    } else {
+      val head = stream.head()
+      if (pred(head)) {
+        EphemeralStream(head)
+      } else {
+        head ##:: takeUpTo(stream.tail(), pred)
+      }
+    }
   }
 
   def check(config: Config, metrics: MetricRegistry): EphemeralStream[Run] = {
@@ -46,10 +64,15 @@ object SyncFTChecker extends Logging {
     val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
     val verifier = new Verifier(failureSpec, program, useSymmetry = config.useSymmetry)(metrics)
     logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
-    config.strategy match {
+    val results = config.strategy match {
       case "sat" => verifier.verify
       case "random" => verifier.random
       case s => throw new IllegalArgumentException(s"unknown strategy $s")
+    }
+    if (config.findAllCounterexamples) {
+      results
+    } else {
+      takeUpTo(results, _.status == RunStatus("failure"))
     }
   }
 
