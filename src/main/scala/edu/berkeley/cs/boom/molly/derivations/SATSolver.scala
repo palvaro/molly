@@ -10,7 +10,7 @@ import org.sat4j.tools.ModelIterator
 import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
 import com.codahale.metrics.MetricRegistry
-import nl.grons.metrics.scala.MetricBuilder
+import nl.grons.metrics.scala.{MetricName, MetricBuilder}
 import scala.annotation.tailrec
 
 object SATSolver extends Logging {
@@ -33,7 +33,7 @@ object SATSolver extends Logging {
   def solve(failureSpec: FailureSpec, goals: List[GoalNode], messages: Seq[Message],
             seed: Set[SATVariable] = Set.empty)(implicit metricRegistry: MetricRegistry):
     Set[FailureSpec] = {
-    implicit val metrics = new MetricBuilder(getClass, metricRegistry)
+    implicit val metrics = new MetricBuilder(MetricName(getClass), metricRegistry)
     val firstMessageSendTimes =
       messages.groupBy(_.from).mapValues(_.minBy(_.sendTime).sendTime)
     val models = goals.flatMap { goal => solve(failureSpec, goal, firstMessageSendTimes, seed) }.toSet
