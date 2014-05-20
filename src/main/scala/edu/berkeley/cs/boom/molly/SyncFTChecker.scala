@@ -44,7 +44,7 @@ object SyncFTChecker extends Logging {
   /**
    * Like `takeWhile`, but also takes the first element NOT satisfying the predicate.
    */
-  private def takeUpTo[T](stream: EphemeralStream[T], pred: T => Boolean): EphemeralStream[T] = {
+  def takeUpTo[T](stream: EphemeralStream[T], pred: T => Boolean): EphemeralStream[T] = {
     if (stream.isEmpty) {
       stream
     } else {
