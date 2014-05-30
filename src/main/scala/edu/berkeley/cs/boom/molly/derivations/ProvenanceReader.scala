@@ -14,10 +14,20 @@ import Scalaz._
 import nl.grons.metrics.scala.InstrumentedBuilder
 import com.codahale.metrics.MetricRegistry
 import edu.berkeley.cs.boom.molly.util.HashcodeCaching
+import scala.collection.immutable._
 
 
 case class GoalTuple(table: String, cols: List[String]) {
   override def toString: String = table + "(" + cols.mkString(", ") + ")"
+}
+
+trait GoalNode {
+  /* this can't be the right way */
+  lazy val id: Int = 0
+  lazy val tuple: GoalTuple = GoalTuple("dummy", List("Dummy"))
+  lazy val importantClocks: Set[(String, String, Int)] = Set()
+  lazy val enumerateDistinctDerivations: Set[(GoalNode)] = Set()
+  lazy val rules: Set[RuleNode] = Set()
 }
 
 /**
@@ -29,8 +39,11 @@ case class GoalTuple(table: String, cols: List[String]) {
  *              more than one rule, then there are multiple derivations of
  *              this fact.
  */
-case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) extends HashcodeCaching {
-  lazy val importantClocks: Set[(String, String, Int)] = {
+case class RealGoalNode(pId: Int,  pTuple: GoalTuple, pRules: Set[RuleNode]) extends HashcodeCaching with GoalNode {
+  override lazy val id = pId
+  override lazy val tuple = pTuple
+  override lazy val rules = pRules
+  override lazy val importantClocks: Set[(String, String, Int)] = {
     val childrenClocks = rules.flatMap(_.subgoals).flatMap(_.importantClocks)
     val newClock = tuple match {
       case GoalTuple("clock", List(from, to, time, _))
@@ -40,12 +53,28 @@ case class GoalNode(id: Int, tuple: GoalTuple, rules: Set[RuleNode]) extends Has
     childrenClocks ++ newClock
   }
 
-  lazy val enumerateDistinctDerivations: Set[GoalNode] = {
+  override lazy val enumerateDistinctDerivations: Set[GoalNode] = {
     if (rules.isEmpty) {
       Set(this)
     } else {
-      rules.flatMap(_.enumerateDistinctDerivationsOfSubGoals).map(r => this.copy(rules = Set(r)))
+      rules.flatMap(_.enumerateDistinctDerivationsOfSubGoals).map(r => this.copy(pRules = Set(r)))
     }
+  }
+}
+
+case class PhonyGoalNode(pId: Int, pTuple: GoalTuple, history: Map[(String, Int), Set[Message]]) extends GoalNode {
+  override lazy val id = pId
+  override lazy val tuple = pTuple
+  override lazy val importantClocks: Set[(String, String, Int)] = {
+    if (history.isDefinedAt((tuple.cols.head, tuple.cols.last.toInt))) {
+      history((tuple.cols.head, tuple.cols.last.toInt)).filter{m => m.from != m.to}.map{m => (m.from, m.to, m.sendTime)}
+    } else {
+      Set()
+    }
+  }
+
+  override lazy val enumerateDistinctDerivations: Set[GoalNode] = {
+    Set(this)
   }
 }
 
@@ -80,13 +109,22 @@ class ProvenanceReader(program: Program,
   private val nextRuleNodeId = new AtomicInteger(0)
   private val nextGoalNodeId = new AtomicInteger(0)
 
+  val histories = closeHistories(findLocalHistories)
+
   private val derivationBuilding = metrics.timer("derivation-tree-building")
 
   val getDerivationTree: GoalTuple => GoalNode =
     Memo.mutableHashMapMemo { derivationBuilding.time { buildDerivationTree(_) }}
 
+  val getPhonyDerivationTree: GoalTuple => PhonyGoalNode =
+    Memo.mutableHashMapMemo { derivationBuilding.time { buildPhonyDerivationTree(_) }}
+
   def getDerivationTreesForTable(goal: String): List[GoalNode] = {
     model.tableAtTime(goal, failureSpec.eot).map(GoalTuple(goal, _)).map(getDerivationTree)
+  }
+
+  def getPhonyDerivationTreesForTable(goal: String): List[PhonyGoalNode] = {
+    model.tableAtTime(goal, failureSpec.eot).map(GoalTuple(goal, _)).map(getPhonyDerivationTree)
   }
 
   def getMessages: List[Message] = {
@@ -114,12 +152,16 @@ class ProvenanceReader(program: Program,
     }
   }
 
+  private def buildPhonyDerivationTree(goalTuple: GoalTuple): PhonyGoalNode = {
+    PhonyGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, histories)
+  }
+
   private def buildDerivationTree(goalTuple: GoalTuple): GoalNode = {
     logger.debug(s"Reading provenance for tuple $goalTuple")
     // First, check whether the goal tuple is part of the EDB:
     if (isInEDB(goalTuple)) {
       logger.debug(s"Found $goalTuple in EDB")
-      return GoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
+      return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
     }
     // Otherwise, a rule must have derived it:
     val ruleFirings = findRuleFirings(goalTuple)
@@ -182,7 +224,35 @@ class ProvenanceReader(program: Program,
       // Recursively compute the provenance of the new goals:
       RuleNode(nextRuleNodeId.getAndIncrement, provRule, positiveGoals.map(getDerivationTree).toSet)
     }
-    GoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes)
+    RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes)
+  }
+
+  private def findLocalHistories(): Map[(String, Int), Set[Message]] = {
+    /* explicit representation of (local) potential casuality: a mapping from (node, time) => {Messages}
+    massively redundant: fix later.
+     */
+    val msgs = getMessages
+    val nodes = msgs.map{m => m.from} ++ msgs.map{m => m.to}
+    val relMsgs = msgs.map{m => m.receiveTime}.filter{m => m < FailureSpec.NEVER}
+    if (!relMsgs.isEmpty) {
+      val deps = for (n <- nodes; t <- 1 to relMsgs.max+5 /*hack attack*/) yield {
+        val myMsgs = msgs.filter{m => (m.to == n && m.receiveTime <= t)}
+        ((n, t), myMsgs.toSet)
+      }
+      deps.toMap
+    } else {
+      HashMap()
+    }
+  }
+
+  private def closeHistories(localMap: Map[(String, Int), Set[Message]]): Map[(String, Int), Set[Message]] = {
+    val puffed = localMap.keys.map{k =>
+      val newStuff = localMap(k).flatMap{m =>
+        localMap((m.from, m.sendTime))
+      }
+      (k, localMap(k) ++ newStuff)
+    }
+    puffed.toMap
   }
 
   private def findRuleFirings(goalTuple: GoalTuple): Set[(String, List[String])] = {

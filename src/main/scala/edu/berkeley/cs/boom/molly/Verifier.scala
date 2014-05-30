@@ -17,7 +17,8 @@ case class RunStatus(underlying: String) extends AnyVal
 case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, model: UltimateModel,
                messages: List[Message], provenance: List[GoalNode])
 
-class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean = false)
+class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  = false,
+               useSymmetry: Boolean = false)
               (implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
 
   private val failureFreeSpec = failureSpec.copy(eff = 0, maxCrashes = 0)
@@ -51,6 +52,14 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
     val failureFreeRun =
       Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, Nil, Nil)
     failureFreeRun ##:: doRandom
+  }
+
+  private def whichProvenance(reader: ProvenanceReader, orig: List[GoalNode]): List[GoalNode] = {
+    if (causalOnly) {
+      reader.getPhonyDerivationTreesForTable("good")
+    } else {
+      orig
+    }
   }
 
   private def doRandom: EphemeralStream[Run] = {
@@ -95,10 +104,11 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
     val provenanceReader =
       new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel)
     val messages = provenanceReader.getMessages
-    val provenance = provenanceReader.getDerivationTreesForTable("good")
+    val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
+    val provenance = whichProvenance(provenanceReader, provenance_orig)
     val satModels = SATSolver.solve(failureSpec, provenance, messages)
     val failureFreeRun =
-      Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, messages, provenance)
+      Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, messages, provenance_orig)
     failureFreeRun ##:: doVerify(satModels.iterator)
   }
 
@@ -130,7 +140,8 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
     logger.info(s"'good' is ${model.tableAtTime("good", failureSpec.eot)}")
     val provenanceReader = new ProvenanceReader(failProgram, failureSpec, model)
     val messages = provenanceReader.getMessages
-    val provenance = provenanceReader.getDerivationTreesForTable("good")
+    val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
+    val provenance = whichProvenance(provenanceReader, provenance_orig)
     if (isGood(model)) {
       // This run may have used more channels than the original run; verify
       // that omissions on those new channels don't produce counterexamples:
@@ -138,13 +149,12 @@ class Verifier(failureSpec: FailureSpec, program: Program, useSymmetry: Boolean 
       val potentialCounterexamples =
         SATSolver.solve(failureSpec, provenance, messages, seed) -- Set(failureSpec)
       val run =
-        Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model, messages, provenance)
+        Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model, messages, provenance_orig)
       (run, potentialCounterexamples)
     } else {
       val run =
-        Run(runId.getAndIncrement, RunStatus("failure"), failureSpec, model, messages, provenance)
+        Run(runId.getAndIncrement, RunStatus("failure"), failureSpec, model, messages, provenance_orig)
       (run, Set.empty)
     }
-
   }
 }

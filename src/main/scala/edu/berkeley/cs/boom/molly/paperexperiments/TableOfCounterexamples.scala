@@ -66,7 +66,7 @@ object TableOfCounterexamples {
     val csvFile = new File("table_of_counterexamples.csv")
     val csvWriter = CSVWriter.open(csvFile)
     val header = Seq("program", "eot", "eff", "crashes", "bound", "mean_random_exe", "mean_random_time",
-      "all_random_data", "backward_exe", "backward_time", "symm_exe", "symm_time")
+      "all_random_data", "backward_exe", "backward_time", "symm_exe", "symm_time", "causal_exe", "causal_time")
     csvWriter.writeRow(header)
     try {
       for ((inputPrograms, eot, eff, crashes, nodes) <- programs) {
@@ -75,14 +75,16 @@ object TableOfCounterexamples {
           useSymmetry = false, disableDotRendering = true)
         val backwardConfig = randomConfig.copy(strategy = "sat")
         val symmetryConfig = backwardConfig.copy(useSymmetry = true)
+        val causalConfig = backwardConfig.copy(strategy = "pcausal")
         val grossEstimate = FailureSpec(eot, eff, crashes, nodes.toList).grossEstimate
         val randomResults = (1 to NUM_RANDOM_RUNS).map { _ => runUntilFirstCounterexample(randomConfig)}
         val meanRandomTime = randomResults.map(_._1).sum / (1.0 * NUM_RANDOM_RUNS)
         val meanRandomExe = randomResults.map(_._2).sum / (1.0 * NUM_RANDOM_RUNS)
         val (backwardTime, backwardExe) = runUntilFirstCounterexample(backwardConfig)
         val (symmetryTime, symmetryExe) = runUntilFirstCounterexample(symmetryConfig)
+        val (causalTime, causalExe) = runUntilFirstCounterexample(causalConfig)
         csvWriter.writeRow(Seq(inputPrograms, eot, eff, crashes, grossEstimate, meanRandomExe,
-          meanRandomTime, randomResults, backwardExe, backwardTime, symmetryExe, symmetryTime))
+          meanRandomTime, randomResults, backwardExe, backwardTime, symmetryExe, symmetryTime, causalExe, causalTime))
       }
     } finally {
       csvWriter.close()

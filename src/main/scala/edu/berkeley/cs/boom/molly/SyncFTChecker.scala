@@ -33,7 +33,7 @@ object SyncFTChecker extends Logging {
     opt[Int]('f', "EFF") text "end of finite failures (default 2)" action { (x, c) => c.copy(eff = x)}
     opt[Int]('c', "crashes") text "crash failures (default 0)" action { (x, c) => c.copy(crashes = x)}
     opt[String]('N', "nodes") text "a comma-separated list of nodes (required)" required() action { (x, c) => c.copy(nodes = x.split(','))}
-    opt[String]("strategy") text "the search strategy ('sat' or 'random')" action { (x, c) => c.copy(strategy = x)} validate { x => if (x != "sat" && x != "random") failure("strategy should be 'sat' or 'random'") else success }
+    opt[String]("strategy") text "the search strategy ('sat', 'random' or 'pcausal')" action { (x, c) => c.copy(strategy = x)} validate { x => if (x != "sat" && x != "random" && x != "pcausal") failure("strategy should be 'sat' or 'random'") else success }
     opt[Unit]("use-symmetry") text "use symmetry to skip equivalent failure scenarios" action { (x, c) => c.copy(useSymmetry = true) }
     opt[Unit]("prov-diagrams") text "generate provenance diagrams for each execution" action { (x, c) => c.copy(generateProvenanceDiagrams = true) }
     opt[Unit]("disable-dot-rendering") text "disable automatic rendering of `dot` diagrams" action { (x, c) => c.copy(disableDotRendering = true) }
@@ -62,10 +62,11 @@ object SyncFTChecker extends Logging {
     val includeSearchPath = config.inputPrograms(0).getParentFile
     val program = combinedInput |> parseProgramAndIncludes(includeSearchPath) |> referenceClockRules |> splitAggregateRules |> addProvenanceRules
     val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
-    val verifier = new Verifier(failureSpec, program, useSymmetry = config.useSymmetry)(metrics)
+    val verifier = new Verifier(failureSpec, program, causalOnly = (config.strategy == "pcausal"), useSymmetry = config.useSymmetry)(metrics)
     logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
     val results = config.strategy match {
       case "sat" => verifier.verify
+      case "pcausal" => verifier.verify
       case "random" => verifier.random
       case s => throw new IllegalArgumentException(s"unknown strategy $s")
     }
