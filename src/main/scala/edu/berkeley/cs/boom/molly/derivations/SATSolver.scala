@@ -89,7 +89,6 @@ object SATSolver extends Logging {
                    (implicit metrics: MetricBuilder):
     Traversable[Set[SATVariable]] = {
     val solver = SolverFactory.newLight()
-
     val idToSatVariable = mutable.HashMap[Int, SATVariable]()
     val satVariableToId = mutable.HashMap[SATVariable, Int]()
 
@@ -109,6 +108,7 @@ object SATSolver extends Logging {
     val distinctGoalDerivations = metrics.timer("proof-tree-enumeration").time {
        goal.enumerateDistinctDerivations
     }
+
     // Crash failures:
     // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
     // will be candidates for crashing:
@@ -153,9 +153,10 @@ object SATSolver extends Logging {
         val crashTimes = firstSendTime to loss.time
         crashTimes.map ( t => CrashFailure(loss.from, t))
       }
+      logger.debug(s"$derivation loss possibility: $messageLosses")
       solver.addClause(messageLosses ++ crashes)
     }
-
+    //logger.warn(s"solver info: $solver")
     // Assume any message losses that have already occurred & disallow failures at or after the EFF
     val nonCrashes = distinctGoalDerivations.flatMap(_.importantClocks)
       .filter(_._3 >= failureSpec.eff).map(MessageLoss.tupled).map(Not)

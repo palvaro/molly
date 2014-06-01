@@ -62,20 +62,24 @@ case class RealGoalNode(pId: Int,  pTuple: GoalTuple, pRules: Set[RuleNode]) ext
   }
 }
 
-case class PhonyGoalNode(pId: Int, pTuple: GoalTuple, history: Map[(String, Int), Set[Message]]) extends GoalNode {
+case class PhonyGoalNode(pId: Int, pTuple: GoalTuple, history: Set[GoalNode]) extends GoalNode {
   override lazy val id = pId
   override lazy val tuple = pTuple
+
   override lazy val importantClocks: Set[(String, String, Int)] = {
-    if (history.isDefinedAt((tuple.cols.head, tuple.cols.last.toInt))) {
-      history((tuple.cols.head, tuple.cols.last.toInt)).filter{m => m.from != m.to}.map{m => (m.from, m.to, m.sendTime)}
-    } else {
-      Set()
+    val childrenClocks = history.flatMap(_.importantClocks)
+    val newClock = tuple match {
+      case GoalTuple("meta", List(to, from, time))
+        if from != to && to != ProvenanceReader.WILDCARD => Set((from, to, time.toInt))
+      case _ => Set.empty
     }
+    childrenClocks ++ newClock
   }
 
   override lazy val enumerateDistinctDerivations: Set[GoalNode] = {
     Set(this)
   }
+
 }
 
 /**
@@ -109,7 +113,7 @@ class ProvenanceReader(program: Program,
   private val nextRuleNodeId = new AtomicInteger(0)
   private val nextGoalNodeId = new AtomicInteger(0)
 
-  val histories = closeHistories(findLocalHistories)
+  val messages = getMessages
 
   private val derivationBuilding = metrics.timer("derivation-tree-building")
 
@@ -153,7 +157,9 @@ class ProvenanceReader(program: Program,
   }
 
   private def buildPhonyDerivationTree(goalTuple: GoalTuple): PhonyGoalNode = {
-    PhonyGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, histories)
+    val msgs = getContributingMessages(goalTuple)
+    logger.debug(s"$goalTuple phony msgs: $msgs")
+    PhonyGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, msgs.map(getPhonyDerivationTree))
   }
 
   private def buildDerivationTree(goalTuple: GoalTuple): GoalNode = {
@@ -227,32 +233,10 @@ class ProvenanceReader(program: Program,
     RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes)
   }
 
-  private def findLocalHistories(): Map[(String, Int), Set[Message]] = {
-    /* explicit representation of (local) potential casuality: a mapping from (node, time) => {Messages}
-    massively redundant: fix later.
-     */
-    val msgs = getMessages
-    val nodes = msgs.map{m => m.from} ++ msgs.map{m => m.to}
-    val relMsgs = msgs.map{m => m.receiveTime}.filter{m => m < FailureSpec.NEVER}
-    if (!relMsgs.isEmpty) {
-      val deps = for (n <- nodes; t <- 1 to relMsgs.max+5 /*hack attack*/) yield {
-        val myMsgs = msgs.filter{m => (m.to == n && m.receiveTime <= t)}
-        ((n, t), myMsgs.toSet)
-      }
-      deps.toMap
-    } else {
-      HashMap()
-    }
-  }
-
-  private def closeHistories(localMap: Map[(String, Int), Set[Message]]): Map[(String, Int), Set[Message]] = {
-    val puffed = localMap.keys.map{k =>
-      val newStuff = localMap(k).flatMap{m =>
-        localMap((m.from, m.sendTime))
-      }
-      (k, localMap(k) ++ newStuff)
-    }
-    puffed.toMap
+  private def getContributingMessages(tuple: GoalTuple): Set[GoalTuple] = {
+    val msgs = messages.filter{m => m.receiveTime != FailureSpec.NEVER}.map{m => GoalTuple("meta", List(m.to, m.from, m.sendTime.toString))}
+    val myMsgs = msgs.filter{m => m != tuple && m.cols.head == tuple.cols.head && m.cols.last.toInt < tuple.cols.last.toInt}
+    myMsgs.toSet
   }
 
   private def findRuleFirings(goalTuple: GoalTuple): Set[(String, List[String])] = {
