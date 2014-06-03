@@ -234,9 +234,14 @@ class ProvenanceReader(program: Program,
   }
 
   private def getContributingMessages(tuple: GoalTuple): Set[GoalTuple] = {
+    val nodes = messages.map{m => m.from} ++ messages.map{m => m.to}
     val msgs = messages.filter{m => m.receiveTime != FailureSpec.NEVER}.map{m => GoalTuple("meta", List(m.to, m.from, m.sendTime.toString))}
-    val myMsgs = msgs.filter{m => m != tuple && m.cols.head == tuple.cols.head && m.cols.last.toInt < tuple.cols.last.toInt}
-    myMsgs.toSet
+    if (nodes.contains(tuple.cols.head)) {
+      msgs.filter { m => m != tuple && m.cols.head == tuple.cols.head && m.cols.last.toInt < tuple.cols.last.toInt}.toSet
+    } else {
+      // a goal that doesn't have a location depends on all previous messages at all locations, no?
+      msgs.filter{m => m != tuple && m.cols.last.toInt < tuple.cols.last.toInt}.toSet
+    }
   }
 
   private def findRuleFirings(goalTuple: GoalTuple): Set[(String, List[String])] = {
