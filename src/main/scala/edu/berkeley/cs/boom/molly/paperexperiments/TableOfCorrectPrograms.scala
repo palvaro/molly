@@ -56,7 +56,7 @@ object TableOfCorrectPrograms {
     val csvFile = new File("table_of_correct_programs.csv")
     val csvWriter = CSVWriter.open(csvFile)
     val header = Seq("program", "eot", "eff", "crashes", "bound", "backward_exe", "backward_time",
-      "symm_exe", "symm_time")
+      "symm_exe", "symm_time", "causal_exe", "causal_time")
     csvWriter.writeRow(header)
     try {
       for ((inputPrograms, eot, eff, crashes, nodes) <- programs) {
@@ -64,11 +64,13 @@ object TableOfCorrectPrograms {
         val backwardConfig = Config(eot, eff, crashes, nodes, inputFiles, strategy = "sat",
           useSymmetry = false, disableDotRendering = true)
         val symmetryConfig = backwardConfig.copy(useSymmetry = true)
+        val causalConfig = backwardConfig.copy(strategy = "pcausal")
         val grossEstimate = FailureSpec(eot, eff, crashes, nodes.toList).grossEstimate
         val (backwardTime, backwardExe) = runUntilExhaustion(backwardConfig)
         val (symmetryTime, symmetryExe) = runUntilExhaustion(symmetryConfig)
+        val (causalTime, causalExe) = runUntilExhaustion(causalConfig)
         csvWriter.writeRow(Seq(inputPrograms, eot, eff, crashes, grossEstimate,
-          backwardExe, backwardTime, symmetryExe, symmetryTime))
+          backwardExe, backwardTime, symmetryExe, symmetryTime, causalExe, causalTime))
       }
     } finally {
       csvWriter.close()
