@@ -106,9 +106,17 @@ object SATSolver extends Logging {
       new VecInt(clause.map(satVarToInt).toArray)
 
     val distinctGoalDerivations = metrics.timer("proof-tree-enumeration").time {
-       goal.enumerateDistinctDerivations
-    }
+      val derivs = goal.enumerateDistinctDerivations.flatten
+      derivs
 
+       //goal.enumerateDistinctDerivations.flatten //.filter{d => d.leaves}
+    }
+    val foo = distinctGoalDerivations.size
+    logger.warn(s"dgd: $foo")
+    //distinctGoalDerivations.foreach{d =>
+    //  val ic = d.importantClocks
+    //  logger.warn(s"DERIV: $d.  clocks $ic")
+    //}
     // Crash failures:
     // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
     // will be candidates for crashing:
@@ -153,7 +161,7 @@ object SATSolver extends Logging {
         val crashTimes = firstSendTime to loss.time
         crashTimes.map ( t => CrashFailure(loss.from, t))
       }
-      logger.debug(s"$derivation loss possibility: $messageLosses")
+      //logger.debug(s"$derivation loss possibility: $messageLosses")
       solver.addClause(messageLosses ++ crashes)
     }
     //logger.warn(s"solver info: $solver")
