@@ -109,8 +109,8 @@ case class RuleNode(id: Int, rule: Rule, positiveSubgoals: Set[GoalNode], negati
     } else {
       val pos = posChoices.filter(!_.isEmpty).map(subgoalDerivations => this.copy(positiveSubgoals = subgoalDerivations.toSet)).toList
       val neg = negChoices.filter(!_.isEmpty).map(subgoalDerivations => this.copy(negativeSubgoals = subgoalDerivations.toSet)).toList
-      System.out.println(s"pos is $pos . neg is $neg")
-      if (pos.isEmpty) { System.out.println("POS is empty foo")}
+      //System.out.println(s"pos is $pos . neg is $neg")
+      //if (pos.isEmpty) { System.out.println("POS is empty foo")}
       Some(pos ++ neg)
     }
   }
@@ -189,13 +189,13 @@ class ProvenanceReader(program: Program,
   }
 
   private def buildDerivationTree(goalTuple: GoalTuple): GoalNode = {
-    logger.warn(s"Reading provenance for tuple $goalTuple")
+    logger.debug(s"Reading provenance for tuple $goalTuple")
     // First, check whether the goal tuple is part of the EDB:
     if (isInEDB(goalTuple)) {
       logger.debug(s"Found $goalTuple in EDB")
       return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
     }  else if (goalTuple.negative && model.tables(goalTuple.table).contains(goalTuple.cols)) {
-      logger.warn(s"$goalTuple.table contains $goalTuple !!")
+      logger.debug(s"$goalTuple.table contains $goalTuple !!")
       return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple.copy(tombstone = true), Set.empty)
       // if it's a neg tuple, discharge it.
     }
@@ -203,24 +203,24 @@ class ProvenanceReader(program: Program,
     // Otherwise, a rule must have derived it:
     val ruleFirings = findRuleFirings(goalTuple)
     if (goalTuple.negative) {
-      logger.warn(s"NEG ($goalTuple) anti-rf $ruleFirings")
+      logger.debug(s"NEG ($goalTuple) anti-rf $ruleFirings")
       if (ruleFirings.isEmpty) return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple.copy(tombstone = true), Set.empty)
-      logger.warn(s"$goalTuple FALLTHRU")
+      logger.debug(s"$goalTuple FALLTHRU")
     } else {
       if (ruleFirings.isEmpty) {
-        logger.warn("NO DERIV $goalTuple")
+        logger.debug("NO DERIV $goalTuple")
         return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple.copy(tombstone = true), Set())
         //assert (!ruleFirings.isEmpty, s"Couldn't find rules to derive tuple $goalTuple")
       }
     }
-    logger.warn(s"Rule firings: $ruleFirings")
+    logger.debug(s"Rule firings: $ruleFirings")
     val ruleNodes = ruleFirings.map { case (provRuleName, provTableRow) =>
       val provRule = program.rules.find(_.head.tableName == provRuleName).get
       val bindings = provRowToVariableBindings(provRule, provTableRow)
-      logger.warn(s"look up for $provRule AND $provTableRow")
+      logger.debug(s"look up for $provRule AND $provTableRow")
       // PAA
       //val time = bindings("NRESERVED").toInt
-      logger.warn(s"bindings: $bindings")
+      logger.debug(s"bindings: $bindings")
       val timevar = bindings.getOrElse("NRESERVED", "-1")
       if (timevar == ProvenanceReader.WILDCARD) {
         // punt on this for now.
@@ -280,7 +280,7 @@ class ProvenanceReader(program: Program,
           assert(matchingTuples.isEmpty, s"Found derivation ${matchingTuples(0)} of negative goal $goal")
           assert(ruleFirings.isEmpty, s"Found rule firings $ruleFirings for negative goal $goal")
         }
-        logger.warn(s"negative goal: $goal}")
+        logger.debug(s"negative goal: $goal}")
       }
 
       val nsg = negativeGoals.map(g => getDerivationTree(g))
@@ -316,7 +316,7 @@ class ProvenanceReader(program: Program,
     if (goalTuple.negative) {
       provTables.map { table =>
         val res = searchProvTable(goalTuple.cols, model.tables(table))
-        logger.warn(s"res $res.  prov table schema is $table ")
+        logger.debug(s"res $res.  prov table schema is $table ")
         val provRule = program.rules.find(_.head.tableName == table).get
         val cols = if (provRule.head.time.isDefined && goalTuple.cols.last != ProvenanceReader.WILDCARD) {
           // unless time itself is a wildcard (in which case, what do?)  keep it on

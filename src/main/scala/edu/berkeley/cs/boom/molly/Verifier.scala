@@ -101,17 +101,14 @@ class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  
       
 
   def verify: EphemeralStream[Run] = {
-    logger.warn(s"---------------")
     val provenanceReader =
       new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel)
     val messages = provenanceReader.getMessages
     val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
     val provenance = whichProvenance(provenanceReader, provenance_orig)
-    //logger.warn(s"PROVO $provenance")
-    //goalTups(provenance)
     provenance.foreach{ p =>
       val tups = p.allTups
-      System.out.println("THIS prov, " + tups.toString)
+      logger.debug("THIS prov, " + tups.toString)
     }
     //logger.warn(s"all tups: $tups")
     val satModels = SATSolver.solve(failureSpec, provenance, messages)
@@ -152,7 +149,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  
     val provenance = whichProvenance(provenanceReader, provenance_orig)
     provenance.foreach{ p =>
       val tups = p.allTups
-      System.out.println("THIS prov, " + tups.toString)
+      logger.debug("THIS prov, " + tups.toString)
     }
 
     if (isGood(model)) {
