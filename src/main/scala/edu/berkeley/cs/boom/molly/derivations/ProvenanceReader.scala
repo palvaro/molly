@@ -289,6 +289,7 @@ class ProvenanceReader(program: Program,
       if (goalTuple.negative) {
         RuleNode(nextRuleNodeId.getAndIncrement, provRule, positiveGoals.map(g => getDerivationTree(g.copy(negative = true))).toSet,
           negativeGoals.map(g => getDerivationTree(g.copy(negative = false))).toSet)
+          //negativeGoals.map(g => getDerivationTree(g)).toSet)
       } else{
         RuleNode(nextRuleNodeId.getAndIncrement, provRule, positiveGoals.map(getDerivationTree).toSet,
           negativeGoals.map(g => getDerivationTree(g.copy(negative = true))).toSet)
