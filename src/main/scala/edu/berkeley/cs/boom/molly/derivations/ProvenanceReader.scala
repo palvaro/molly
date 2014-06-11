@@ -190,11 +190,12 @@ class ProvenanceReader(program: Program,
 
   private def buildDerivationTree(goalTuple: GoalTuple): GoalNode = {
     logger.debug(s"Reading provenance for tuple $goalTuple")
+    val tupleWasDerived = model.tables(goalTuple.table).contains(goalTuple.cols)
     // First, check whether the goal tuple is part of the EDB:
     if (isInEDB(goalTuple)) {
       logger.debug(s"Found $goalTuple in EDB")
       return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
-    }  else if (goalTuple.negative && model.tables(goalTuple.table).contains(goalTuple.cols)) {
+    }  else if (goalTuple.negative && tupleWasDerived) {
       logger.debug(s"$goalTuple.table contains $goalTuple !!")
       return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple.copy(tombstone = true), Set.empty)
       // if it's a neg tuple, discharge it.
@@ -206,12 +207,8 @@ class ProvenanceReader(program: Program,
       logger.debug(s"NEG ($goalTuple) anti-rf $ruleFirings")
       if (ruleFirings.isEmpty) return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple.copy(tombstone = true), Set.empty)
       logger.debug(s"$goalTuple FALLTHRU")
-    } else {
-      if (ruleFirings.isEmpty) {
-        logger.debug("NO DERIV $goalTuple")
-        return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple.copy(tombstone = true), Set())
-        //assert (!ruleFirings.isEmpty, s"Couldn't find rules to derive tuple $goalTuple")
-      }
+    } else if (ruleFirings.isEmpty && tupleWasDerived) {
+      throw new IllegalStateException(s"Couldn't find rules to explain derivation of $goalTuple")
     }
     logger.debug(s"Rule firings: $ruleFirings")
     val ruleNodes = ruleFirings.map { case (provRuleName, provTableRow) =>
