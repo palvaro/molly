@@ -27,7 +27,7 @@ trait GoalNode {
   lazy val id: Int = 0
   lazy val tuple: GoalTuple = GoalTuple("dummy", List("Dummy"))
   lazy val importantClocks: Set[(String, String, Int)] = Set()
-  lazy val enumerateDistinctDerivations: Set[Option[GoalNode]] = Set(None)
+  lazy val enumerateDistinctDerivations: Set[GoalNode] = Set()
   lazy val rules: Set[RuleNode] = Set()
   def allTups: Set[GoalTuple] = Set()
 }
@@ -56,13 +56,13 @@ case class RealGoalNode(pId: Int,  pTuple: GoalTuple, pRules: Set[RuleNode], neg
     childrenClocks ++ newClock
   }
 
-  override lazy val enumerateDistinctDerivations: Set[Option[GoalNode]] = {
+  override lazy val enumerateDistinctDerivations: Set[GoalNode] = {
     if (rules.isEmpty) {
-      if (tuple.tombstone) Set(None) else Set(Some(this))
+      if (tuple.tombstone) Set() else Set(this)
     } else {
-      rules.flatMap{r =>
-        val dd = r.enumerateDistinctDerivationsOfSubGoals.getOrElse(Set())
-        dd.map(d => Some(this.copy(pRules = Set(d))))
+      rules.flatMap{ r =>
+        val dd = r.enumerateDistinctDerivationsOfSubGoals
+        dd.map(d => this.copy(pRules = Set(d)))
       }
     }
   }
@@ -86,32 +86,28 @@ case class PhonyGoalNode(pId: Int, pTuple: GoalTuple, history: Set[GoalNode]) ex
     childrenClocks ++ newClock
   }
 
-  override lazy val enumerateDistinctDerivations: Set[Option[GoalNode]] = {
-    Set(Some(this))
+  override lazy val enumerateDistinctDerivations: Set[GoalNode] = {
+    Set(this)
   }
 
 }
 
 /**
  * Represents a concrete application of a rule.
- *
- * @param rule the rule that was applied.
- * @param subgoals the facts that were used in this rule application.
  */
 case class RuleNode(id: Int, rule: Rule, positiveSubgoals: Set[GoalNode], negativeSubgoals: Set[GoalNode]) extends HashcodeCaching {
-  require (!positiveSubgoals.isEmpty, "RuleNode must have subgoals")
-  lazy val enumerateDistinctDerivationsOfSubGoals: Option[List[RuleNode]] = {
-    val posChoices: List[List[GoalNode]] = positiveSubgoals.map(_.enumerateDistinctDerivations.flatten.toList).toList
-    val negChoices: List[List[GoalNode]] = negativeSubgoals.map(_.enumerateDistinctDerivations.flatten.toList).toList
-
+  require (!positiveSubgoals.isEmpty || !negativeSubgoals.isEmpty, "RuleNode must have subgoals")
+  lazy val enumerateDistinctDerivationsOfSubGoals: List[RuleNode] = {
+    val posChoices: List[List[GoalNode]] = positiveSubgoals.map(_.enumerateDistinctDerivations.toList).toList
+    val negChoices: List[List[GoalNode]] = negativeSubgoals.map(_.enumerateDistinctDerivations.toList).toList
     if (posChoices.isEmpty || posChoices.forall(s => s.isEmpty)) {
-      None
+      Nil
     } else {
       val pos = posChoices.filter(!_.isEmpty).map(subgoalDerivations => this.copy(positiveSubgoals = subgoalDerivations.toSet)).toList
       val neg = negChoices.filter(!_.isEmpty).map(subgoalDerivations => this.copy(negativeSubgoals = subgoalDerivations.toSet)).toList
       //System.out.println(s"pos is $pos . neg is $neg")
       //if (pos.isEmpty) { System.out.println("POS is empty foo")}
-      Some(pos ++ neg)
+      pos ++ neg
     }
   }
   lazy val subgoals: Set[GoalNode] = {

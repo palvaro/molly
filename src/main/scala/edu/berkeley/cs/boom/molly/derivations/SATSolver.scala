@@ -106,7 +106,7 @@ object SATSolver extends Logging {
       new VecInt(clause.map(satVarToInt).toArray)
 
     val distinctGoalDerivations = metrics.timer("proof-tree-enumeration").time {
-       goal.enumerateDistinctDerivations.flatten
+       goal.enumerateDistinctDerivations
     }
     val foo = distinctGoalDerivations.size
     logger.debug(s"dgd: $foo")
