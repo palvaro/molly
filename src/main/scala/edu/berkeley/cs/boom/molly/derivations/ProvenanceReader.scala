@@ -100,14 +100,18 @@ case class RuleNode(id: Int, rule: Rule, positiveSubgoals: Set[GoalNode], negati
   lazy val enumerateDistinctDerivationsOfSubGoals: List[RuleNode] = {
     val posChoices: List[List[GoalNode]] = positiveSubgoals.map(_.enumerateDistinctDerivations.toList).toList
     val negChoices: List[List[GoalNode]] = negativeSubgoals.map(_.enumerateDistinctDerivations.toList).toList
-    if (posChoices.isEmpty || posChoices.forall(s => s.isEmpty)) {
+    if ((posChoices ++ negChoices).exists(_.isEmpty)) {
+      // There's an underivable subgoal, so this rule couldn't have fired.
       Nil
-    } else {
-      val pos = posChoices.filter(!_.isEmpty).map(subgoalDerivations => this.copy(positiveSubgoals = subgoalDerivations.toSet)).toList
-      val neg = negChoices.filter(!_.isEmpty).map(subgoalDerivations => this.copy(negativeSubgoals = subgoalDerivations.toSet)).toList
-      //System.out.println(s"pos is $pos . neg is $neg")
-      //if (pos.isEmpty) { System.out.println("POS is empty foo")}
-      pos ++ neg
+    } else { // Every subgoal has at least one derivation
+      val pos = if (posChoices.isEmpty) List(List.empty) else posChoices.sequence
+      val neg = if (negChoices.isEmpty) List(List.empty) else negChoices.sequence
+      val results = for (
+        p <- pos;
+        n <- neg
+      ) yield { this.copy(positiveSubgoals = p.toSet, negativeSubgoals = n.toSet) }
+      assert (!results.isEmpty)
+      results.toList
     }
   }
   lazy val subgoals: Set[GoalNode] = {
@@ -201,7 +205,7 @@ class ProvenanceReader(program: Program,
     val ruleFirings = findRuleFirings(goalTuple)
     if (goalTuple.negative) {
       logger.debug(s"NEG ($goalTuple) anti-rf $ruleFirings")
-      if (ruleFirings.isEmpty) return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple.copy(tombstone = true), Set.empty)
+      if (ruleFirings.isEmpty) return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
       logger.debug(s"$goalTuple FALLTHRU")
     } else if (ruleFirings.isEmpty && tupleWasDerived) {
       throw new IllegalStateException(s"Couldn't find rules to explain derivation of $goalTuple")
@@ -276,8 +280,6 @@ class ProvenanceReader(program: Program,
         logger.debug(s"negative goal: $goal}")
       }
 
-      val nsg = negativeGoals.map(g => getDerivationTree(g))
-      val psg = positiveGoals.map(g => getDerivationTree(g))
       // Recursively compute the provenance of the new goals:
       if (goalTuple.negative) {
         RuleNode(nextRuleNodeId.getAndIncrement, provRule, positiveGoals.map(g => getDerivationTree(g.copy(negative = true))).toSet,
