@@ -22,8 +22,10 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
     (Seq("replog.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            0,    false),
     (Seq("replog.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
     (Seq("ack_rb.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
+
     (Seq("2pc.ded", "2pc_assert.ded"),            7,      3,     Seq("a", "b", "C", "d"),       0,    false),
     (Seq("2pc.ded", "2pc_assert.ded"),            6,      3,     Seq("a", "b", "C", "d"),       1,    true),
+
     // naive 2pc has executions that don't decide even if the model is fail-stop.
     (Seq("2pc.ded", "2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       1,    true),
     (Seq("2pc.ded", "2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    true),
@@ -37,17 +39,16 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
     (Seq("2pc_timeout.ded", "2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       1,    true),
     (Seq("2pc_timeout.ded", "2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    true),
 
-    // even the collaborative termination protocol has executions that don't decide.   
+    // even the collaborative termination protocol has executions that don't decide.
     (Seq("2pc_ctp.ded", "2pc_assert.ded"),        6,      0,     Seq("a", "b", "C", "d"),       1,    true),
     (Seq("2pc_ctp.ded", "2pc_assert.ded"),        6,      0,     Seq("a", "b", "C", "d"),       2,    true),
 
     // 3pc (yay?) is "nonblocking" in the synchronous, fail-stop model
     (Seq("3pc.ded", "2pc_assert.ded"),        8,      0,     Seq("a", "b", "C", "d"),       1,    false),
     (Seq("3pc.ded", "2pc_assert.ded"),        8,      0,     Seq("a", "b", "C", "d"),       2,    false),
-
     // somewhat surprised though that we can't break it's synchronicity assumptions by dropping messages...
     //(Seq("3pc.ded", "2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
-
+    (Seq("negative_support_test.ded"),            4,      2,    Seq("a", "b"),                0,    true),
     (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       1,    true),
     (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false)
   
