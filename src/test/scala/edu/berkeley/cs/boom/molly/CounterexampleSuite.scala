@@ -12,16 +12,16 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
 
   val scenarios = Table(
     ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
-    (Seq("simplog.ded", "deliv_assert.ded"),      6,      3,     Seq("a", "b", "c"),            0,    true),
-    (Seq("rdlog.ded", "deliv_assert.ded"),        6,      3,     Seq("a", "b", "c"),            0,    false),
-    (Seq("rdlog.ded", "deliv_assert.ded"),        6,      3,     Seq("a", "b", "c"),            1,    true),
+    (Seq("delivery/simplog.ded", "delivery/deliv_assert.ded"),      6,      3,     Seq("a", "b", "c"),            0,    true),
+    (Seq("delivery/rdlog.ded", "delivery/deliv_assert.ded"),        6,      3,     Seq("a", "b", "c"),            0,    false),
+    (Seq("delivery/rdlog.ded", "delivery/deliv_assert.ded"),        6,      3,     Seq("a", "b", "c"),            1,    true),
     // classic reliable broadcast fails in the omission model
-    (Seq("classic_rb.ded", "deliv_assert.ded"),   6,      3,     Seq("a", "b", "c"),            0,    true),
+    (Seq("delivery/classic_rb.ded", "delivery/deliv_assert.ded"),   6,      3,     Seq("a", "b", "c"),            0,    true),
     // but is robust in the fail-stop model.
-    (Seq("classic_rb.ded", "deliv_assert.ded"),   6,      0,     Seq("a", "b", "c"),            2,    false),
-    (Seq("replog.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            0,    false),
-    (Seq("replog.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
-    (Seq("ack_rb.ded", "deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
+    (Seq("delivery/classic_rb.ded", "delivery/deliv_assert.ded"),   6,      0,     Seq("a", "b", "c"),            2,    false),
+    (Seq("delivery/replog.ded", "delivery/deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            0,    false),
+    (Seq("delivery/replog.ded", "delivery/deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
+    (Seq("delivery/ack_rb.ded", "delivery/deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
     (Seq("2pc.ded", "2pc_assert.ded"),            7,      3,     Seq("a", "b", "C", "d"),       0,    false),
     (Seq("2pc.ded", "2pc_assert.ded"),            6,      3,     Seq("a", "b", "C", "d"),       1,    true),
     // naive 2pc has executions that don't decide even if the model is fail-stop.

@@ -11,9 +11,9 @@ import com.codahale.metrics.MetricRegistry
 object TableOfCorrectPrograms {
   val programs = Seq(
     // ("Input programs", "eot", "eff", "crashes", "nodes")
-    (Seq("rdlog.ded", "deliv_assert.ded"),    25, 23, 0, Seq("a", "b", "c")), // AKA retry-deliv
-    (Seq("replog.ded", "deliv_assert.ded"),    8,  6, 1, Seq("a", "b", "c")),  // AKA redun-deliv
-    (Seq("ack_rb.ded", "deliv_assert.ded"),    8,  6, 1, Seq("a", "b", "c")),  // AKA ack-deliv
+    (Seq("delivery/rdlog.ded", "delivery/deliv_assert.ded"),    25, 23, 0, Seq("a", "b", "c")), // AKA retry-deliv
+    (Seq("delivery/replog.ded", "delivery/deliv_assert.ded"),    8,  6, 1, Seq("a", "b", "c")),  // AKA redun-deliv
+    (Seq("delivery/ack_rb.ded", "delivery/deliv_assert.ded"),    8,  6, 1, Seq("a", "b", "c")),  // AKA ack-deliv
     (Seq("paxos_synod.ded"),                   8,  3, 1, Seq("a", "b", "c"))
   )
 

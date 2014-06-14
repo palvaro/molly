@@ -23,11 +23,11 @@ object Harness extends Logging {
 
   val cherries = ScalatestTable(
     ("Input programs",                       "eot",   "eff",                "nodes",    "crashes",    "should find counterexample"),
-    (Seq("simplog.ded", "deliv_assert.ded"),      4,      2,     Seq("a", "b", "c"),            0,    true),
-    (Seq("rdlog.ded", "deliv_assert.ded"),      25,      23,     Seq("a", "b", "c"),            0,    true),
-    (Seq("rdlog.ded", "deliv_assert.ded"),      4,      2,     	 Seq("a", "b", "c"),            1,    true),
-    (Seq("replog.ded", "deliv_assert.ded"),      8,      6,     Seq("a", "b", "c"),            1,    true),
-    (Seq("classic_rb.ded", "deliv_assert.ded"),   5,      3,     Seq("a", "b", "c"),            0,    true),
+    (Seq("delivery/simplog.ded", "delivery/deliv_assert.ded"),      4,      2,     Seq("a", "b", "c"),            0,    true),
+    (Seq("delivery/rdlog.ded", "delivery/deliv_assert.ded"),      25,      23,     Seq("a", "b", "c"),            0,    true),
+    (Seq("delivery/rdlog.ded", "delivery/deliv_assert.ded"),      4,      2,     	 Seq("a", "b", "c"),            1,    true),
+    (Seq("delivery/replog.ded", "delivery/deliv_assert.ded"),      8,      6,     Seq("a", "b", "c"),            1,    true),
+    (Seq("delivery/classic_rb.ded", "delivery/deliv_assert.ded"),   5,      3,     Seq("a", "b", "c"),            0,    true),
     (Seq("2pc.ded", "2pc_assert.ded"),      5,      0,     Seq("a", "b", "C", "d"),            1,    true),
     (Seq("2pc_ctp.ded", "2pc_assert.ded"),        6,      0,     Seq("a", "b", "C", "d"),       1,    true),
     (Seq("2pc_timeout.ded", "2pc_assert_optimist.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    false),
