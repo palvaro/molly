@@ -17,9 +17,9 @@ object TableOfCounterexamples {
     (Seq("delivery/simplog.ded", "delivery/deliv_assert.ded"),    4, 2, 0, Seq("a", "b", "c")),  // AKA simple-deliv
     (Seq("delivery/rdlog.ded", "delivery/deliv_assert.ded"),      4, 2, 1, Seq("a", "b", "c")), // AKA retry-deliv
     (Seq("delivery/classic_rb.ded", "delivery/deliv_assert.ded"), 5, 3, 0, Seq("a", "b", "c")),  // AKA classic-deliv
-    (Seq("2pc.ded", "2pc_assert.ded"),          5, 0, 1, Seq("a", "b", "C", "d")),
-    (Seq("2pc_ctp.ded", "2pc_assert.ded"),      8, 0, 1, Seq("a", "b", "C", "d")),
-    (Seq("3pc.ded", "2pc_assert.ded"),          9, 7, 1, Seq("a", "b", "C", "d")),
+    (Seq("commit/2pc.ded", "commit/2pc_assert.ded"),          5, 0, 1, Seq("a", "b", "C", "d")),
+    (Seq("commit/2pc_ctp.ded", "commit/2pc_assert.ded"),      8, 0, 1, Seq("a", "b", "C", "d")),
+    (Seq("commit/3pc.ded", "commit/2pc_assert.ded"),          9, 7, 1, Seq("a", "b", "C", "d")),
     (Seq("kafka.ded"),                          6, 4, 1, Seq("a", "b", "c", "C", "Z"))
   )
 

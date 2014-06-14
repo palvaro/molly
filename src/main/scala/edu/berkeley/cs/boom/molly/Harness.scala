@@ -28,52 +28,52 @@ object Harness extends Logging {
     (Seq("delivery/rdlog.ded", "delivery/deliv_assert.ded"),      4,      2,     	 Seq("a", "b", "c"),            1,    true),
     (Seq("delivery/replog.ded", "delivery/deliv_assert.ded"),      8,      6,     Seq("a", "b", "c"),            1,    true),
     (Seq("delivery/classic_rb.ded", "delivery/deliv_assert.ded"),   5,      3,     Seq("a", "b", "c"),            0,    true),
-    (Seq("2pc.ded", "2pc_assert.ded"),      5,      0,     Seq("a", "b", "C", "d"),            1,    true),
-    (Seq("2pc_ctp.ded", "2pc_assert.ded"),        6,      0,     Seq("a", "b", "C", "d"),       1,    true),
-    (Seq("2pc_timeout.ded", "2pc_assert_optimist.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    false),
-    (Seq("3pc.ded", "2pc_assert.ded"),        8,      0,     Seq("a", "b", "C", "d"),       2,    false),
-    (Seq("3pc.ded", "2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("commit/2pc.ded", "commit/2pc_assert.ded"),      5,      0,     Seq("a", "b", "C", "d"),            1,    true),
+    (Seq("commit/2pc_ctp.ded", "commit/2pc_assert.ded"),        6,      0,     Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("commit/2pc_timeout.ded", "commit/2pc_assert_optimist.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    false),
+    (Seq("commit/3pc.ded", "commit/2pc_assert.ded"),        8,      0,     Seq("a", "b", "C", "d"),       2,    false),
+    (Seq("commit/3pc.ded", "commit/2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
 
     (Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       1,    true),
     (Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       0,    false),
 
-    (Seq("ack_rb.ded", "deliv_assert.ded"),       8,      6,     Seq("a", "b", "c"),            1,    false)
+    (Seq("delivery/ack_rb.ded", "delivery/deliv_assert.ded"),       8,      6,     Seq("a", "b", "c"),            1,    false)
   )
 
   val scenarios = ScalatestTable(
     ("Input programs",                                      "nodes",    "crashes",    "should find counterexample"),
-    (Seq("simplog.ded", "deliv_assert.ded"),     Seq("a", "b", "c"),            0,    true),
-    (Seq("rdlog.ded", "deliv_assert.ded"),       Seq("a", "b", "c"),            0,    false),
-    (Seq("rdlog.ded", "deliv_assert.ded"),       Seq("a", "b", "c"),            1,    true),
+    (Seq("delivery/simplog.ded", "delivery/deliv_assert.ded"),     Seq("a", "b", "c"),            0,    true),
+    (Seq("delivery/rdlog.ded", "delivery/deliv_assert.ded"),       Seq("a", "b", "c"),            0,    false),
+    (Seq("delivery/rdlog.ded", "delivery/deliv_assert.ded"),       Seq("a", "b", "c"),            1,    true),
     // classic reliable broadcast fails in the omission model
-    (Seq("classic_rb.ded", "deliv_assert.ded"),  Seq("a", "b", "c"),            0,    true),
+    (Seq("delivery/classic_rb.ded", "delivery/deliv_assert.ded"),  Seq("a", "b", "c"),            0,    true),
     // but is robust in the fail-stop model.
-    (Seq("classic_rb.ded", "deliv_assert.ded"),  Seq("a", "b", "c"),            2,    false),
-    (Seq("replog.ded", "deliv_assert.ded"),      Seq("a", "b", "c"),            0,    false),
-    (Seq("replog.ded", "deliv_assert.ded"),      Seq("a", "b", "c"),            1,    false),
-    (Seq("ack_rb.ded", "deliv_assert.ded"),      Seq("a", "b", "c"),            1,    false),
-    (Seq("2pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       0,    false),
-    (Seq("2pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("delivery/classic_rb.ded", "delivery/deliv_assert.ded"),  Seq("a", "b", "c"),            2,    false),
+    (Seq("delivery/replog.ded", "delivery/deliv_assert.ded"),      Seq("a", "b", "c"),            0,    false),
+    (Seq("delivery/replog.ded", "delivery/deliv_assert.ded"),      Seq("a", "b", "c"),            1,    false),
+    (Seq("delivery/ack_rb.ded", "delivery/deliv_assert.ded"),      Seq("a", "b", "c"),            1,    false),
+    (Seq("commit/2pc.ded", "commit/2pc_assert.ded"),           Seq("a", "b", "C", "d"),       0,    false),
+    (Seq("commit/2pc.ded", "commit/2pc_assert.ded"),           Seq("a", "b", "C", "d"),       1,    true),
     // naive 2pc has executions that don't decide even if the model is fail-stop.
-    (Seq("2pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       1,    true),
-    (Seq("2pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       2,    true),
+    (Seq("commit/2pc.ded", "commit/2pc_assert.ded"),           Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("commit/2pc.ded", "commit/2pc_assert.ded"),           Seq("a", "b", "C", "d"),       2,    true),
     // indeed, even if we ignore executions where the coordinator fails:
-    (Seq("2pc.ded", "2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       1,    true),
-    (Seq("2pc.ded", "2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       2,    true),
+    (Seq("commit/2pc.ded", "commit/2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("commit/2pc.ded", "commit/2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       2,    true),
     // with timeout+abort at the coordinator, we get termination when the coordinator doesn't fail
-    (Seq("2pc_timeout.ded", "2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       1,    false),
-    (Seq("2pc_timeout.ded", "2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       2,    false),
+    (Seq("commit/2pc_timeout.ded", "commit/2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       1,    false),
+    (Seq("commit/2pc_timeout.ded", "commit/2pc_assert_optimist.ded"),  Seq("a", "b", "C", "d"),       2,    false),
     // but honestly...
-    (Seq("2pc_timeout.ded", "2pc_assert.ded"),   Seq("a", "b", "C", "d"),       1,    true),
-    (Seq("2pc_timeout.ded", "2pc_assert.ded"),   Seq("a", "b", "C", "d"),       2,    true),
+    (Seq("commit/2pc_timeout.ded", "commit/2pc_assert.ded"),   Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("commit/2pc_timeout.ded", "commit/2pc_assert.ded"),   Seq("a", "b", "C", "d"),       2,    true),
 
     // even the collaborative termination protocol has executions that don't decide.
-    (Seq("2pc_ctp.ded", "2pc_assert.ded"),       Seq("a", "b", "C", "d"),       1,    true),
-    (Seq("2pc_ctp.ded", "2pc_assert.ded"),       Seq("a", "b", "C", "d"),       2,    true),
+    (Seq("commit/2pc_ctp.ded", "commit/2pc_assert.ded"),       Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("commit/2pc_ctp.ded", "commit/2pc_assert.ded"),       Seq("a", "b", "C", "d"),       2,    true),
 
     // 3pc (yay?) is "nonblocking" in the synchronous, fail-stop model
-    (Seq("3pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       1,    false),
-    (Seq("3pc.ded", "2pc_assert.ded"),           Seq("a", "b", "C", "d"),       2,    false),
+    (Seq("commit/3pc.ded", "commit/2pc_assert.ded"),           Seq("a", "b", "C", "d"),       1,    false),
+    (Seq("commit/3pc.ded", "commit/2pc_assert.ded"),           Seq("a", "b", "C", "d"),       2,    false),
 
     // somewhat surprised though that we can't break it's synchronicity assumptions by dropping messages...
     //(Seq("3pc.ded", "2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
