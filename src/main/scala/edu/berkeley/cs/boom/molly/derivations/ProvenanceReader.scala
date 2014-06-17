@@ -95,27 +95,16 @@ case class PhonyGoalNode(pId: Int, pTuple: GoalTuple, history: Set[GoalNode]) ex
 /**
  * Represents a concrete application of a rule.
  */
-case class RuleNode(id: Int, rule: Rule, positiveSubgoals: Set[GoalNode], negativeSubgoals: Set[GoalNode]) extends HashcodeCaching {
-  require (!positiveSubgoals.isEmpty || !negativeSubgoals.isEmpty, "RuleNode must have subgoals")
+case class RuleNode(id: Int, rule: Rule, subgoals: Set[GoalNode]) extends HashcodeCaching {
+  require (!subgoals.isEmpty, "RuleNode must have subgoals")
   lazy val enumerateDistinctDerivationsOfSubGoals: List[RuleNode] = {
-    val posChoices: List[List[GoalNode]] = positiveSubgoals.map(_.enumerateDistinctDerivations.toList).toList
-    val negChoices: List[List[GoalNode]] = negativeSubgoals.map(_.enumerateDistinctDerivations.toList).toList
-    if ((posChoices ++ negChoices).exists(_.isEmpty)) {
+    val choices: List[List[GoalNode]] = subgoals.map(_.enumerateDistinctDerivations.toList).toList
+    if (choices.exists(_.isEmpty)) {
       // There's an underivable subgoal, so this rule couldn't have fired.
       Nil
-    } else { // Every subgoal has at least one derivation
-      val pos = if (posChoices.isEmpty) List(List.empty) else posChoices.sequence
-      val neg = if (negChoices.isEmpty) List(List.empty) else negChoices.sequence
-      val results = for (
-        p <- pos;
-        n <- neg
-      ) yield { this.copy(positiveSubgoals = p.toSet, negativeSubgoals = n.toSet) }
-      assert (!results.isEmpty)
-      results.toList
+    } else {
+      choices.sequence.map(subgoalDerivations => this.copy(subgoals = subgoalDerivations.toSet))
     }
-  }
-  lazy val subgoals: Set[GoalNode] = {
-    positiveSubgoals ++ negativeSubgoals
   }
 }
 
@@ -281,14 +270,13 @@ class ProvenanceReader(program: Program,
       }
 
       // Recursively compute the provenance of the new goals:
-      if (goalTuple.negative) {
-        RuleNode(nextRuleNodeId.getAndIncrement, provRule, positiveGoals.map(g => getDerivationTree(g.copy(negative = true))).toSet,
-          negativeGoals.map(g => getDerivationTree(g.copy(negative = false))).toSet)
-          //negativeGoals.map(g => getDerivationTree(g)).toSet)
-      } else{
-        RuleNode(nextRuleNodeId.getAndIncrement, provRule, positiveGoals.map(getDerivationTree).toSet,
-          negativeGoals.map(g => getDerivationTree(g.copy(negative = true))).toSet)
-      }
+      val subgoals =
+        if (goalTuple.negative) {
+          positiveGoals.map(_.copy(negative = true)) ++ negativeGoals.map(_.copy(negative = false))
+        } else {
+          positiveGoals.map(_.copy(negative = false)) ++ negativeGoals.map(_.copy(negative = true))
+        }
+      RuleNode(nextRuleNodeId.getAndIncrement, provRule, subgoals.map(getDerivationTree).toSet)
     }
     RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes)
   }
