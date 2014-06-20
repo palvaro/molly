@@ -1,12 +1,9 @@
 package edu.berkeley.cs.boom.molly.ast
 
-import org.kiama.attribution.Attributable
-import org.kiama.util.Positioned
+import org.kiama.util.TreeNode
 
 
-trait Node extends Attributable with Positioned
-
-sealed trait Atom extends Node
+sealed trait Atom extends TreeNode
 sealed trait Expression extends Atom
 sealed trait Constant extends Expression
 
@@ -34,11 +31,11 @@ case class Program(
   rules: List[Rule],
   facts: List[Predicate],
   includes: List[Include],
-  tables: Set[Table] = Set()) extends Node
+  tables: Set[Table] = Set()) extends TreeNode
 
 case class Table(name: String, types: List[String])
 
-sealed trait Clause extends Node
+sealed trait Clause extends TreeNode
 case class Include(file: String) extends Clause
 case class Rule(head: Predicate, body: List[Either[Predicate, Expr]]) extends Clause {
   def bodyPredicates: List[Predicate] = body.collect { case Left(pred) => pred }
@@ -86,7 +83,7 @@ case class Predicate(tableName: String,
   }
 }
 
-sealed trait Time extends Node
+sealed trait Time extends TreeNode
 case class Next() extends Time
 case class Async() extends Time
 case class Tick(number: Int) extends Time
