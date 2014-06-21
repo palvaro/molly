@@ -67,12 +67,24 @@ object DedalusTyper {
     // Determine (maximal) sets of columns that must have the same type:
     val colRefToMinColRef = new UnionFind[ColRef](allColRefs.toSet.asJava)
 
-    // Find multiple occurrences of variable in rules; these columns must have the same type:
+    // Columns that are related through variable unification must have the same type:
     for (
       rule <- program.rules;
       sameTypedCols <- rule.variablesWithIndexes.groupBy(_._1).values.map(x => x.map(_._2));
       firstColRef = sameTypedCols.head;
       colRef <- sameTypedCols
+    ) {
+      colRefToMinColRef.union(colRef, firstColRef)
+    }
+
+    // Columns that are related through variables appearing in quals must have the same type:
+    for (
+      rule <- program.rules;
+      varToColRef = rule.variablesWithIndexes.groupBy(_._1).mapValues(_.head._2);
+      qual <- rule.bodyQuals;
+      colRefs = qual.variables.toList.map(i => varToColRef(i.name));
+      firstColRef = colRefs.head;
+      colRef <- colRefs
     ) {
       colRefToMinColRef.union(colRef, firstColRef)
     }
@@ -98,14 +110,7 @@ object DedalusTyper {
         inferredType = inferTypeOfAtom(col)
         if inferredType != UNKNOWN
       ) yield (colRefToMinColRef.find((pred.tableName, colNum)), (col, inferredType))
-      val inferredFromQuals = for (
-        rule <- program.rules;
-        qual <- rule.bodyQuals;
-        (col, colNum) <- rule.head.cols.zipWithIndex
-        if col.isInstanceOf[Identifier]
-        if qual.variables.contains(col.asInstanceOf[Identifier])
-      ) yield (colRefToMinColRef.find((rule.head.tableName, colNum)), (qual, INT))
-      val evidence = inferredFromPredicates ++ inferredFromQuals ++ metaEDBTypes
+      val evidence = inferredFromPredicates ++ metaEDBTypes
       evidence.groupBy(_._1).mapValues(_.map(_._2).toSet)
     }
 
