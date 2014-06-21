@@ -7,6 +7,7 @@ import edu.berkeley.cs.boom.molly.ast.Aggregate
 import edu.berkeley.cs.boom.molly.ast.Program
 import org.jgrapht.alg.util.UnionFind
 import scala.collection.JavaConverters._
+import org.kiama.util.Positions
 
 object DedalusTyper {
 
@@ -27,9 +28,9 @@ object DedalusTyper {
     }
   }
 
-  private def dom(types: Set[Type]): Set[Type] = {
-    if (types == Set(STRING, LOCATION)) {
-      Set(LOCATION)
+  private def dom(types: Set[(Atom, Type)]): Set[(Atom, Type)] = {
+    if (types.map(_._2) == Set(STRING, LOCATION)) {
+      types.filter(_._2 == LOCATION)
     } else {
       types
     }
@@ -76,33 +77,34 @@ object DedalusTyper {
       colRefToMinColRef.union(colRef, firstColRef)
     }
 
-    // Accumulate all type evidence:
-    val typeEvidence: Map[ColRef, Set[Type]] = {
+    // Accumulate all type evidence.  To provide useful error messages when we find conflicting
+    // evidence, we store the provenance of this evidence (the Atom
+    val typeEvidence: Map[ColRef, Set[(Atom, Type)]] = {
       // Some meta-EDB tables might be empty in certain runs (such as crash()), so we need to
       // hard-code their type evidence:
       val metaEDBTypes = Seq(
-        (colRefToMinColRef.find(("crash", 0)), LOCATION),
-        (colRefToMinColRef.find(("crash", 1)), LOCATION),
-        (colRefToMinColRef.find(("crash", 2)), INT),
-        (colRefToMinColRef.find(("crash", 3)), INT),
-        (colRefToMinColRef.find(("clock", 0)), LOCATION),
-        (colRefToMinColRef.find(("clock", 1)), LOCATION),
-        (colRefToMinColRef.find(("clock", 2)), INT),
-        (colRefToMinColRef.find(("clock", 3)), INT)
+        (colRefToMinColRef.find(("crash", 0)), (null, LOCATION)),
+        (colRefToMinColRef.find(("crash", 1)), (null, LOCATION)),
+        (colRefToMinColRef.find(("crash", 2)), (null, INT)),
+        (colRefToMinColRef.find(("crash", 3)), (null, INT)),
+        (colRefToMinColRef.find(("clock", 0)), (null, LOCATION)),
+        (colRefToMinColRef.find(("clock", 1)), (null, LOCATION)),
+        (colRefToMinColRef.find(("clock", 2)), (null, INT)),
+        (colRefToMinColRef.find(("clock", 3)), (null, INT))
       )
       val inferredFromPredicates = for (
         pred <- allPredicates;
         (col, colNum) <- pred.cols.zipWithIndex;
         inferredType = inferTypeOfAtom(col)
         if inferredType != UNKNOWN
-      ) yield (colRefToMinColRef.find((pred.tableName, colNum)), inferredType)
+      ) yield (colRefToMinColRef.find((pred.tableName, colNum)), (col, inferredType))
       val inferredFromQuals = for (
         rule <- program.rules;
-        expressionVars = rule.bodyQuals.flatMap(_.variables);
+        qual <- rule.bodyQuals;
         (col, colNum) <- rule.head.cols.zipWithIndex
         if col.isInstanceOf[Identifier]
-        if expressionVars.contains(col.asInstanceOf[Identifier])
-      ) yield (colRefToMinColRef.find((rule.head.tableName, colNum)), INT)
+        if qual.variables.contains(col.asInstanceOf[Identifier])
+      ) yield (colRefToMinColRef.find((rule.head.tableName, colNum)), (qual, INT))
       val evidence = inferredFromPredicates ++ inferredFromQuals ++ metaEDBTypes
       evidence.groupBy(_._1).mapValues(_.map(_._2).toSet)
     }
@@ -124,9 +126,21 @@ object DedalusTyper {
         val types = dom(typeEvidence.getOrElse(representative,
           throw new Exception(
             s"No evidence for type of column ${representative._2} of ${representative._1}")))
-        assert(types.size == 1,
-          s"Conflicting evidence for type of column $colNum of $tableName: $types")
-        types.head
+        assert(types.map(_._2).size == 1, {
+          val evidenceByType = types.groupBy(_._2)
+          val headPosition =
+            Positions.getStart(allPredicates.filter(_.tableName == tableName).head.cols(colNum))
+          s"Conflicting evidence for type of column $colNum of $tableName:\n\n" +
+          headPosition.longString + "\n---------------------------------------------\n" +
+          evidenceByType.map { case (inferredType, evidence) =>
+            val evidenceLocations = for ((atom, _) <- evidence) yield {
+              if (atom != null) Positions.getStart(atom).longString
+              else "unification with meta EDB column"
+            }
+            s"Evidence for type $inferredType:\n\n" +  evidenceLocations.mkString("\n")
+          }.mkString("\n---------------------------------------------\n")
+        })
+        types.head._2
       }
       Table(tableName, colTypes.toList)
     }
