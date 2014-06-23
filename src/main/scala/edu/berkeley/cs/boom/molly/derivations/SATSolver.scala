@@ -1,17 +1,13 @@
 package edu.berkeley.cs.boom.molly.derivations
 
-import org.sat4j.minisat.SolverFactory
 import edu.berkeley.cs.boom.molly.FailureSpec
 import scala.collection.mutable
-import org.sat4j.specs.IVecInt
-import org.sat4j.core.VecInt
 import com.typesafe.scalalogging.slf4j.Logging
-import org.sat4j.tools.ModelIterator
-import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
 import com.codahale.metrics.MetricRegistry
 import nl.grons.metrics.scala.{MetricName, MetricBuilder}
 import scala.annotation.tailrec
+import z3.scala._
 
 object SATSolver extends Logging {
   sealed trait SATVariable
@@ -88,40 +84,84 @@ object SATSolver extends Logging {
                     firstMessageSendTimes: Map[String, Int], seed: Set[SATVariable])
                    (implicit metrics: MetricBuilder):
     Traversable[Set[SATVariable]] = {
-    val solver = SolverFactory.newLight()
-    val idToSatVariable = mutable.HashMap[Int, SATVariable]()
-    val satVariableToId = mutable.HashMap[SATVariable, Int]()
 
-    implicit def satVarToInt(satVar: SATVariable): Int = {
-      val id = satVariableToId.getOrElseUpdate(satVar, {
-        satVar match {
-          case Not(v) => -1 * satVarToInt(v)
-          case _ => solver.nextFreeVarId(true)
-        }
-      })
-      idToSatVariable(id) = satVar
-      id
-    }
-    implicit def satVarsToVecInt(clause: Iterable[SATVariable]): IVecInt =
-      new VecInt(clause.map(satVarToInt).toArray)
-
-    val distinctGoalDerivations = metrics.timer("proof-tree-enumeration").time {
-       goal.enumerateDistinctDerivations
-    }
-
-    // Crash failures:
     // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
     // will be candidates for crashing:
     val importantNodes: Set[String] =
-      distinctGoalDerivations.flatMap(_.importantClocks).filter(_._3 < failureSpec.eot).map(_._1).toSet ++
-      seed.collect { case cf: CrashFailure => cf.node }
+      goal.importantClocks.filter(_._3 < failureSpec.eot).map(_._1).toSet ++
+        seed.collect { case cf: CrashFailure => cf.node }
     if (importantNodes.isEmpty) {
       logger.debug(s"Goal ${goal.tuple} has no important nodes; skipping SAT solver")
       return Set.empty
     } else {
       logger.debug(s"Goal ${goal.tuple} has important nodes $importantNodes")
     }
+
+    val config = new Z3Config("MODEL" -> true)
+    val z3 = new Z3Context(config)
+
+    val z3ConstNameToVar = mutable.HashMap[String, SATVariable]()
+    val varToZ3Map = mutable.HashMap[SATVariable, Z3AST]()
+
+    implicit def varToZ3(satVar: SATVariable): Z3AST = {
+      val constName = satVar.toString
+      val id = varToZ3Map.getOrElseUpdate(satVar, {
+        satVar match {
+          case Not(v) => z3.mkNot(varToZ3(v))
+          case _ => z3.mkBoolConst(constName)
+        }
+      })
+      z3ConstNameToVar(constName) = satVar
+      id
+    }
+
+    def goalToZ3(goal: GoalNode): Z3AST = {
+      if (goal.rules.isEmpty) {
+        goal.ownImportantClock match {
+          case None => z3.mkTrue()
+          case Some((from, to, time)) =>
+            // The message could be missing due to a message loss or due to its
+            // sender having crashed at an earlier timestamp:
+            val loss = varToZ3(MessageLoss(from, to, time))
+            val firstSendTime = firstMessageSendTimes.getOrElse(from, 1)
+            val crashTimes = firstSendTime to time
+            val crashes = crashTimes.map ( t => varToZ3(CrashFailure(from, t)))
+            //z3.mkOr(loss, z3.mkOr(crashes: _*))
+            loss  // TODO: handle crashes
+        }
+      } else {
+        val ruleASTs = goal.rules.toSeq.map(ruleToZ3)
+        z3.mkOr(ruleASTs: _*)
+      }
+    }
+
+    def ruleToZ3(rule: RuleNode): Z3AST = {
+      val subgoalASTs = rule.subgoals.toSeq.map(goalToZ3)
+      z3.mkAnd(subgoalASTs: _*)
+    }
+
+    def exactlyOne(vars: Seq[Z3AST]): Z3AST = {
+      val options = for (selected <- vars;
+           notSelected = vars.filter(_ != selected))
+      yield {
+        z3.mkAnd(selected, z3.mkAnd(notSelected.map(z3.mkNot): _*))
+      }
+      z3.mkOr(options: _*)
+    }
+
+    val solver = z3.mkSolver()
+    solver.assertCnstr(goalToZ3(goal))
+
+    // Assume any message losses that have already occurred & disallow failures at or after the EFF
+    // TODO: maybe we could simply not generate message loss variables at or after the EFF
+    // so we don't have to add these assumptions.
+    val nonCrashes = goal.importantClocks.filter(_._3 >= failureSpec.eff).map(MessageLoss.tupled).map(Not)
+    val assumptions = seed ++ nonCrashes
+    for (assumption <- assumptions) {
+      solver.assertCnstr(varToZ3(assumption))
+    }
     // Add constraints to ensure that each node crashes at a single time, or never crashes:
+    /*
     for (node <- importantNodes) {
       // There's no point in considering crashes before the first time that a node sends a message,
       // since all such scenarios will be equivalent to crashing when sending the first message:
@@ -134,46 +174,42 @@ object SATSolver extends Logging {
       // An extra variable for scenarios where the node didn't crash:
       val neverCrashed = NeverCrashed(node)
       // Each node crashes at a single time, or never crashes:
-      solver.addExactly((crashVars ++ seedCrashes).toSet ++ Seq(neverCrashed), 1)
+      solver.assertCnstr(exactlyOne(((crashVars ++ seedCrashes).toSet ++ Seq(neverCrashed)).map(varToZ3).toSeq))
     }
+    */
     // If there are at most C crashes, then at least (N - C) nodes never crash:
-    solver.addAtLeast(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.maxCrashes)
+    // TODO: implement this constraint
+    //solver.addAtLeast(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.maxCrashes)
 
-    // Message losses:
-    for (
-      derivation <- distinctGoalDerivations;
-      importantClocks = derivation.importantClocks
-      if !importantClocks.isEmpty
-    ) {
-      // The message could be missing due to a message loss or due to its
-      // sender having crashed at an earlier timestamp:
-      val messageLosses = importantClocks.map(MessageLoss.tupled)
-      val crashes = messageLosses.flatMap { loss =>
-        val firstSendTime = firstMessageSendTimes.getOrElse(loss.from, 1)
-        val crashTimes = firstSendTime to loss.time
-        crashTimes.map ( t => CrashFailure(loss.from, t))
-      }
-      logger.debug(s"$derivation loss possibility: $messageLosses")
-      solver.addClause(messageLosses ++ crashes)
+    def modelToVars(model: Z3Model): Seq[SATVariable] = {
+      val True = z3.mkTrue()
+      val False = z3.mkFalse()
+      model.getModelConstantInterpretations.map {
+        case (decl, True) =>
+          z3ConstNameToVar(decl.getName.toString())
+        case (decl, False) =>
+          Not(z3ConstNameToVar(decl.getName.toString()))
+      }.toSeq
     }
-    //logger.warn(s"solver info: $solver")
-    // Assume any message losses that have already occurred & disallow failures at or after the EFF
-    val nonCrashes = distinctGoalDerivations.flatMap(_.importantClocks)
-      .filter(_._3 >= failureSpec.eff).map(MessageLoss.tupled).map(Not)
-    val assumptions = seed ++ nonCrashes
 
-    val models = ArrayBuffer[Set[SATVariable]]()
-    metrics.timer("sat4j-time").time {
-      val modelIterator = new ModelIterator(solver)
-      while (modelIterator.isSatisfiable(assumptions)) {
-        val newModel = modelIterator.model().filter(_ > 0).map(idToSatVariable).toSet
-        // Exclude models where no failures or crashes occurred:
-        if (!newModel.filter(!_.isInstanceOf[NeverCrashed]).isEmpty) {
-          models += newModel
+    val allModels: Seq[Set[SATVariable]] = {
+      val results = mutable.ArrayBuffer[Set[SATVariable]]()
+      while (true) {
+        solver.check()
+        if (solver.isModelAvailable) {
+          val model = solver.getModel()
+          val allModelVars = modelToVars(model)
+          results += allModelVars.filterNot(_.isInstanceOf[Not]).toSet
+          // Add a new "give me a different model" constraint:
+          solver.assertCnstr(z3.mkNot(z3.mkAnd(allModelVars.map(varToZ3): _*)))
+        } else {
+          return results
         }
       }
+      results
     }
-    solver.reset()  // Required to allow the solver to be GC'ed.
-    models
+
+    z3.delete()
+    allModels
   }
 }

@@ -43,7 +43,8 @@ object MollyBuild extends Build {
         "nl.grons" %% "metrics-scala" % "3.2.0_a2.2",
         "com.codahale.metrics" % "metrics-json" % "3.0.2",
         "org.codehaus.jackson" % "jackson-mapper-asl" % "1.9.13",
-        "com.github.tototoshi" %% "scala-csv" % "1.0.0"
+        "com.github.tototoshi" %% "scala-csv" % "1.0.0",
+        "z3" % "z3" % " 2.1.1" from "https://github.com/epfl-lara/ScalaZ3/releases/download/v2.1.1/scalaz3-osx-64b-2.1.1.jar"
       )
     )
   )

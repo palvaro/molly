@@ -26,6 +26,8 @@ trait GoalNode {
   lazy val id: Int = 0
   lazy val tuple: GoalTuple = GoalTuple("dummy", List("Dummy"))
   lazy val importantClocks: Set[(String, String, Int)] = Set()
+  /** If this goal node is an important clock, returns that clock */
+  lazy val ownImportantClock: Option[(String, String, Int)] = None
   lazy val enumerateDistinctDerivations: Set[(GoalNode)] = Set()
   lazy val rules: Set[RuleNode] = Set()
 }
@@ -43,14 +45,16 @@ case class RealGoalNode(pId: Int,  pTuple: GoalTuple, pRules: Set[RuleNode]) ext
   override lazy val id = pId
   override lazy val tuple = pTuple
   override lazy val rules = pRules
+  override lazy val ownImportantClock = {
+    tuple match {
+      case GoalTuple("clock", List(from, to, time, _))
+        if from != to && to != ProvenanceReader.WILDCARD => Some((from, to, time.toInt))
+      case _ => None
+    }
+  }
   override lazy val importantClocks: Set[(String, String, Int)] = {
     val childrenClocks = rules.flatMap(_.subgoals).flatMap(_.importantClocks)
-    val newClock = tuple match {
-      case GoalTuple("clock", List(from, to, time, _))
-        if from != to && to != ProvenanceReader.WILDCARD => Set((from, to, time.toInt))
-      case _ => Set.empty
-    }
-    childrenClocks ++ newClock
+    childrenClocks ++ ownImportantClock.toSet
   }
 
   override lazy val enumerateDistinctDerivations: Set[GoalNode] = {
@@ -66,14 +70,17 @@ case class PhonyGoalNode(pId: Int, pTuple: GoalTuple, history: Set[GoalNode]) ex
   override lazy val id = pId
   override lazy val tuple = pTuple
 
+  override lazy val ownImportantClock = {
+    tuple match {
+      case GoalTuple("meta", List(to, from, time))
+        if from != to && to != ProvenanceReader.WILDCARD => Some((from, to, time.toInt))
+      case _ => None
+    }
+  }
+
   override lazy val importantClocks: Set[(String, String, Int)] = {
     val childrenClocks = history.flatMap(_.importantClocks)
-    val newClock = tuple match {
-      case GoalTuple("meta", List(to, from, time))
-        if from != to && to != ProvenanceReader.WILDCARD => Set((from, to, time.toInt))
-      case _ => Set.empty
-    }
-    childrenClocks ++ newClock
+    childrenClocks ++ ownImportantClock.toSet
   }
 
   override lazy val enumerateDistinctDerivations: Set[GoalNode] = {
