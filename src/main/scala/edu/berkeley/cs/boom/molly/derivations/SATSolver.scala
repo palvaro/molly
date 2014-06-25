@@ -59,7 +59,7 @@ object SATSolver extends Logging {
     }
     val minimalModels = removeSupersets(modelsBySize)
     logger.info(s"SAT problem has ${minimalModels.size} minimal solutions")
-    logger.debug(s"Minimal SAT solutions are:\n${models.map(_.toString()).mkString("\n")}")
+    logger.debug(s"SAT solutions are:\n${models.map(_.toString()).mkString("\n")}")
 
     minimalModels.flatMap { vars =>
       val crashes = vars.collect { case cf: CrashFailure => cf }
@@ -126,8 +126,8 @@ object SATSolver extends Logging {
             val firstSendTime = firstMessageSendTimes.getOrElse(from, 1)
             val crashTimes = firstSendTime to time
             val crashes = crashTimes.map ( t => varToZ3(CrashFailure(from, t)))
-            //z3.mkOr(loss, z3.mkOr(crashes: _*))
-            loss  // TODO: handle crashes
+            z3.mkOr(loss, z3.mkOr(crashes: _*))
+            //loss  // TODO: handle crashes
         }
       } else {
         val ruleASTs = goal.rules.toSeq.map(ruleToZ3)
@@ -147,6 +147,17 @@ object SATSolver extends Logging {
         z3.mkAnd(selected, z3.mkAnd(notSelected.map(z3.mkNot): _*))
       }
       z3.mkOr(options: _*)
+
+    }
+
+    def addAtLeast(nodes: List[NeverCrashed], keep: Int): Z3AST = {
+      logger.warn(s"keep $keep nodes $nodes")
+      val possibleUp = nodes.combinations(keep).map { combo =>
+        logger.warn(s"combo $combo")
+        z3.mkAnd(combo.map(varToZ3): _*)
+      }.toList
+      logger.warn(s"possible $possibleUp")
+      z3.mkOr(possibleUp: _*)
     }
 
     val solver = z3.mkSolver()
@@ -161,7 +172,7 @@ object SATSolver extends Logging {
       solver.assertCnstr(varToZ3(assumption))
     }
     // Add constraints to ensure that each node crashes at a single time, or never crashes:
-    /*
+
     for (node <- importantNodes) {
       // There's no point in considering crashes before the first time that a node sends a message,
       // since all such scenarios will be equivalent to crashing when sending the first message:
@@ -176,10 +187,10 @@ object SATSolver extends Logging {
       // Each node crashes at a single time, or never crashes:
       solver.assertCnstr(exactlyOne(((crashVars ++ seedCrashes).toSet ++ Seq(neverCrashed)).map(varToZ3).toSeq))
     }
-    */
+
     // If there are at most C crashes, then at least (N - C) nodes never crash:
     // TODO: implement this constraint
-    //solver.addAtLeast(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.maxCrashes)
+    solver.assertCnstr(addAtLeast(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.maxCrashes))
 
     def modelToVars(model: Z3Model): Seq[SATVariable] = {
       val True = z3.mkTrue()
