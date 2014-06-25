@@ -59,7 +59,7 @@ object SATSolver extends Logging {
     }
     val minimalModels = removeSupersets(modelsBySize)
     logger.info(s"SAT problem has ${minimalModels.size} minimal solutions")
-    logger.debug(s"SAT solutions are:\n${models.map(_.toString()).mkString("\n")}")
+    logger.debug(s"Minimal SAT solutions are:\n${minimalModels.map(_.toString()).mkString("\n")}")
 
     minimalModels.flatMap { vars =>
       val crashes = vars.collect { case cf: CrashFailure => cf }
@@ -118,7 +118,7 @@ object SATSolver extends Logging {
     def goalToZ3(goal: GoalNode): Z3AST = {
       if (goal.rules.isEmpty) {
         goal.ownImportantClock match {
-          case None => z3.mkTrue()
+          case None => z3.mkFalse()
           case Some((from, to, time)) =>
             // The message could be missing due to a message loss or due to its
             // sender having crashed at an earlier timestamp:
@@ -127,17 +127,16 @@ object SATSolver extends Logging {
             val crashTimes = firstSendTime to time
             val crashes = crashTimes.map ( t => varToZ3(CrashFailure(from, t)))
             z3.mkOr(loss, z3.mkOr(crashes: _*))
-            //loss  // TODO: handle crashes
         }
       } else {
         val ruleASTs = goal.rules.toSeq.map(ruleToZ3)
-        z3.mkOr(ruleASTs: _*)
+        z3.mkAnd(ruleASTs: _*)
       }
     }
 
     def ruleToZ3(rule: RuleNode): Z3AST = {
       val subgoalASTs = rule.subgoals.toSeq.map(goalToZ3)
-      z3.mkAnd(subgoalASTs: _*)
+      z3.mkOr(subgoalASTs: _*)
     }
 
     def exactlyOne(vars: Seq[Z3AST]): Z3AST = {
@@ -160,12 +159,33 @@ object SATSolver extends Logging {
       z3.mkOr(possibleUp: _*)
     }
 
-    val solver = z3.mkSolver()
+    def assertAtLeastK(solver: Z3Solver, bools: List[Z3AST], k: Int) {
+      // "At least k" is easy to express as a pseudo-boolean constraint.
+      // Let's introduce PB variables that are logically equivalent to our original variables:
+      val intSort = z3.mkIntSort()
+      val zero = z3.mkInt(0, intSort)
+      val one = z3.mkInt(1, intSort)
+      val kay = z3.mkInt(k, intSort)
+      def toPB(bool: Z3AST): Z3AST = {
+        // Encoding based on the one from http://stackoverflow.com/a/20550445/590203
+        val pb = z3.mkIntConst("PB_" + bool.toString())
+        // This integer is a pseudo-boolean:
+        solver.assertCnstr(z3.mkAnd(z3.mkGE(pb, zero), z3.mkLE(pb, one)))
+        // The psuedo-boolean is related to the original boolean:
+        solver.assertCnstr(z3.mkIff(z3.mkEq(pb, one), bool))
+        pb
+      }
+      val pbs = bools.map(toPB)
+      val sum = z3.mkAdd(pbs: _*)
+      solver.assertCnstr(z3.mkGE(sum, kay))
+    }
+
+    implicit val solver = z3.mkSolver()
     solver.assertCnstr(goalToZ3(goal))
 
     // Assume any message losses that have already occurred & disallow failures at or after the EFF
     // TODO: maybe we could simply not generate message loss variables at or after the EFF
-    // so we don't have to add these assumptions.
+    //  so we don't have to add these assumptions.
     val nonCrashes = goal.importantClocks.filter(_._3 >= failureSpec.eff).map(MessageLoss.tupled).map(Not)
     val assumptions = seed ++ nonCrashes
     for (assumption <- assumptions) {
@@ -189,18 +209,27 @@ object SATSolver extends Logging {
     }
 
     // If there are at most C crashes, then at least (N - C) nodes never crash:
-    // TODO: implement this constraint
-    solver.assertCnstr(addAtLeast(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.maxCrashes))
+
+    assertAtLeastK(solver, failureSpec.nodes.map(NeverCrashed).map(varToZ3),
+      failureSpec.nodes.size - failureSpec.maxCrashes)
 
     def modelToVars(model: Z3Model): Seq[SATVariable] = {
       val True = z3.mkTrue()
       val False = z3.mkFalse()
-      model.getModelConstantInterpretations.map {
-        case (decl, True) =>
-          z3ConstNameToVar(decl.getName.toString())
-        case (decl, False) =>
-          Not(z3ConstNameToVar(decl.getName.toString()))
-      }.toSeq
+      model.getModelConstantInterpretations.flatMap {
+        case (decl, boolValue) =>
+          val declName = decl.getName.toString()
+          if (declName.startsWith("PB_")) {
+            None
+          } else if (boolValue == False) {
+            Some(Not(z3ConstNameToVar(declName)))
+          } else if (boolValue == True) {
+            Some(z3ConstNameToVar(declName))
+          } else {
+            throw new IllegalStateException()
+          }
+      }.filterNot(_.isInstanceOf[NeverCrashed]).toSeq
+      // Less clutter if we don't emit the internal "never crashed" variables
     }
 
     val allModels: Seq[Set[SATVariable]] = {
@@ -210,9 +239,14 @@ object SATSolver extends Logging {
         if (solver.isModelAvailable) {
           val model = solver.getModel()
           val allModelVars = modelToVars(model)
-          results += allModelVars.filterNot(_.isInstanceOf[Not]).toSet
+          val newSolution = allModelVars.filterNot(_.isInstanceOf[Not]).toSet
+          // Skip empty models
+          if (!newSolution.isEmpty) {
+            results += newSolution
+          }
           // Add a new "give me a different model" constraint:
           solver.assertCnstr(z3.mkNot(z3.mkAnd(allModelVars.map(varToZ3): _*)))
+          model.delete  // TODO: apparently this is deprecated.
         } else {
           return results
         }
