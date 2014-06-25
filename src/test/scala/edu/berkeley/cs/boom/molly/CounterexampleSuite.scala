@@ -46,14 +46,14 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
     (Seq("commit/3pc.ded", "commit/2pc_assert.ded"),        8,      0,     Seq("a", "b", "C", "d"),       2,    false),
 
     // somewhat surprised though that we can't break it's synchronicity assumptions by dropping messages...
-    //(Seq("commit/3pc.ded", "commit/2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
+    (Seq("commit/3pc.ded", "commit/2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
 
     (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       1,    true),
-    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false)
+    (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false),
   
     // simulating the kafka bug
-    //(Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       1,    true),
-    //(Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       0,    false)
+    (Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       1,    true),
+    (Seq("kafka.ded"),                           6,      4,     Seq("a", "b", "c", "C", "Z"),       0,    false)
   )
 
   property("SAT guided search should correctly find counterexamples") {
