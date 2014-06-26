@@ -106,6 +106,11 @@ class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  
     val messages = provenanceReader.getMessages
     val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
     val provenance = whichProvenance(provenanceReader, provenance_orig)
+    provenance.foreach{ p =>
+      val tups = p.allTups
+      logger.debug("THIS prov, " + tups.toString)
+    }
+    //logger.warn(s"all tups: $tups")
     val satModels = SATSolver.solve(failureSpec, provenance, messages)
     val failureFreeRun =
       Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, messages, provenance_orig)
@@ -142,6 +147,11 @@ class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  
     val messages = provenanceReader.getMessages
     val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
     val provenance = whichProvenance(provenanceReader, provenance_orig)
+    provenance.foreach{ p =>
+      val tups = p.allTups
+      logger.debug("THIS prov, " + tups.toString)
+    }
+
     if (isGood(model)) {
       // This run may have used more channels than the original run; verify
       // that omissions on those new channels don't produce counterexamples:

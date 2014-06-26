@@ -85,6 +85,28 @@ object SATSolver extends Logging {
                    (implicit metrics: MetricBuilder):
     Traversable[Set[SATVariable]] = {
 
+/*
+    implicit def satVarToInt(satVar: SATVariable): Int = {
+      val id = satVariableToId.getOrElseUpdate(satVar, {
+        satVar match {
+          case Not(v) => -1 * satVarToInt(v)
+          case _ => solver.nextFreeVarId(true)
+        }
+      })
+      idToSatVariable(id) = satVar
+      id
+    }
+
+    implicit def satVarsToVecInt(clause: Iterable[SATVariable]): IVecInt =
+      new VecInt(clause.map(satVarToInt).toArray)
+*/
+    val distinctGoalDerivations = metrics.timer("proof-tree-enumeration").time {
+       goal.enumerateDistinctDerivations
+    }
+    val foo = distinctGoalDerivations.size
+    logger.debug(s"dgd: $foo")
+
+    // Crash failures:
     // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
     // will be candidates for crashing:
     val importantNodes: Set[String] =
@@ -126,10 +148,9 @@ object SATSolver extends Logging {
             val firstSendTime = firstMessageSendTimes.getOrElse(from, 1)
             val crashTimes = firstSendTime to time
             val crashes = crashTimes.map ( t => varToZ3(CrashFailure(from, t)))
-            if (time < failureSpec.eff)
-              z3.mkOr(loss, z3.mkOr(crashes: _*))
-            else
-              z3.mkOr(crashes: _*)
+            val lossAST = if (time < failureSpec.eff) loss else z3.mkFalse
+            val crashAST = if (crashes.toSet.isEmpty) z3.mkFalse else z3.mkOr(crashes: _*)
+            z3.mkOr(lossAST, crashAST)
         }
       } else {
         val ruleASTs = goal.rules.toSeq.map(ruleToZ3)
@@ -238,6 +259,7 @@ object SATSolver extends Logging {
           model.delete  // TODO: apparently this is deprecated.
         } else {
           return results
+
         }
       }
       results

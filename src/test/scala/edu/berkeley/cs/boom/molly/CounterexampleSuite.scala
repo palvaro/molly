@@ -18,6 +18,7 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
     // classic reliable broadcast fails in the omission model
     (Seq("delivery/classic_rb.ded", "delivery/deliv_assert.ded"),   6,      3,     Seq("a", "b", "c"),            0,    true),
     // but is robust in the fail-stop model.
+
     (Seq("delivery/classic_rb.ded", "delivery/deliv_assert.ded"),   6,      0,     Seq("a", "b", "c"),            2,    false),
     (Seq("delivery/replog.ded", "delivery/deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            0,    false),
     (Seq("delivery/replog.ded", "delivery/deliv_assert.ded"),       6,      3,     Seq("a", "b", "c"),            1,    false),
@@ -27,6 +28,7 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
     // naive commit/2pc has executions that don't decide even if the model is fail-stop.
     (Seq("commit/2pc.ded", "commit/2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       1,    true),
     (Seq("commit/2pc.ded", "commit/2pc_assert.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    true),
+
     // indeed, even if we ignore executions where the coordinator fails:
     (Seq("commit/2pc.ded", "commit/2pc_assert_optimist.ded"),            6,      0,     Seq("a", "b", "C", "d"),       1,    true),
     (Seq("commit/2pc.ded", "commit/2pc_assert_optimist.ded"),            6,      0,     Seq("a", "b", "C", "d"),       2,    true),
@@ -47,6 +49,7 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
 
     // somewhat surprised though that we can't break it's synchronicity assumptions by dropping messages...
     (Seq("commit/3pc.ded", "commit/2pc_assert.ded"),        9,      7,     Seq("a", "b", "C", "d"),       1,    true),
+
 
     (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       1,    true),
     (Seq("tokens.ded"),                           6,      3,     Seq("a", "b", "c", "d"),       0,    false),
