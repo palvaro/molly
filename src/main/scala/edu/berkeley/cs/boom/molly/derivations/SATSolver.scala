@@ -126,7 +126,10 @@ object SATSolver extends Logging {
             val firstSendTime = firstMessageSendTimes.getOrElse(from, 1)
             val crashTimes = firstSendTime to time
             val crashes = crashTimes.map ( t => varToZ3(CrashFailure(from, t)))
-            z3.mkOr(loss, z3.mkOr(crashes: _*))
+            if (time < failureSpec.eff)
+              z3.mkOr(loss, z3.mkOr(crashes: _*))
+            else
+              z3.mkOr(crashes: _*)
         }
       } else {
         val ruleASTs = goal.rules.toSeq.map(ruleToZ3)
@@ -147,16 +150,6 @@ object SATSolver extends Logging {
       }
       z3.mkOr(options: _*)
 
-    }
-
-    def addAtLeast(nodes: List[NeverCrashed], keep: Int): Z3AST = {
-      logger.warn(s"keep $keep nodes $nodes")
-      val possibleUp = nodes.combinations(keep).map { combo =>
-        logger.warn(s"combo $combo")
-        z3.mkAnd(combo.map(varToZ3): _*)
-      }.toList
-      logger.warn(s"possible $possibleUp")
-      z3.mkOr(possibleUp: _*)
     }
 
     def assertAtLeastK(solver: Z3Solver, bools: List[Z3AST], k: Int) {
@@ -183,12 +176,8 @@ object SATSolver extends Logging {
     implicit val solver = z3.mkSolver()
     solver.assertCnstr(goalToZ3(goal))
 
-    // Assume any message losses that have already occurred & disallow failures at or after the EFF
-    // TODO: maybe we could simply not generate message loss variables at or after the EFF
-    //  so we don't have to add these assumptions.
-    val nonCrashes = goal.importantClocks.filter(_._3 >= failureSpec.eff).map(MessageLoss.tupled).map(Not)
-    val assumptions = seed ++ nonCrashes
-    for (assumption <- assumptions) {
+    // Assume any message losses that have already occurred
+    for (assumption <- seed) {
       solver.assertCnstr(varToZ3(assumption))
     }
     // Add constraints to ensure that each node crashes at a single time, or never crashes:
