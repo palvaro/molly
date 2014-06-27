@@ -32,7 +32,7 @@ object SATSolver extends Logging {
     implicit val metrics = new MetricBuilder(MetricName(getClass), metricRegistry)
     val firstMessageSendTimes =
       messages.groupBy(_.from).mapValues(_.minBy(_.sendTime).sendTime)
-    val models = goals.flatMap { goal => solve(failureSpec, goal, firstMessageSendTimes, seed) }.toSet
+    val models = goals.flatMap{ goal => solve(failureSpec, goal, firstMessageSendTimes, seed)}.toSet
     logger.info(s"SAT problem has ${models.size} solutions")
     logger.debug(s"SAT solutions are:\n${models.map(_.toString()).mkString("\n")}")
     // Keep only the minimal models by excluding models that are supersets of other models.
@@ -84,27 +84,6 @@ object SATSolver extends Logging {
                     firstMessageSendTimes: Map[String, Int], seed: Set[SATVariable])
                    (implicit metrics: MetricBuilder):
     Traversable[Set[SATVariable]] = {
-
-/*
-    implicit def satVarToInt(satVar: SATVariable): Int = {
-      val id = satVariableToId.getOrElseUpdate(satVar, {
-        satVar match {
-          case Not(v) => -1 * satVarToInt(v)
-          case _ => solver.nextFreeVarId(true)
-        }
-      })
-      idToSatVariable(id) = satVar
-      id
-    }
-
-    implicit def satVarsToVecInt(clause: Iterable[SATVariable]): IVecInt =
-      new VecInt(clause.map(satVarToInt).toArray)
-*/
-    val distinctGoalDerivations = metrics.timer("proof-tree-enumeration").time {
-       goal.enumerateDistinctDerivations
-    }
-    val foo = distinctGoalDerivations.size
-    logger.debug(s"dgd: $foo")
 
     // Crash failures:
     // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
