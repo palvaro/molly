@@ -51,7 +51,9 @@ case class RealGoalNode(pId: Int,  pTuple: GoalTuple, pRules: Set[RuleNode], neg
   override lazy val ownImportantClock = {
     tuple match {
       case GoalTuple("clock", List(from, to, time, _), _, _)
-        if from != to && to != ProvenanceReader.WILDCARD => Some((from, to, time.toInt))
+        if from != to
+          && to != ProvenanceReader.WILDCARD
+          && from != ProvenanceReader.WILDCARD => Some((from, to, time.toInt))
       case _ => None
     }
   }

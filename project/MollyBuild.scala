@@ -37,6 +37,7 @@ object MollyBuild extends Build {
         "io.argonaut" %% "argonaut" % "6.0.3",
         "org.ow2.sat4j" % "org.ow2.sat4j.core" % "2.3.5",
         "commons-io" % "commons-io" % "2.4",
+        "pl.project13.scala" %% "rainbow" % "0.2" exclude("org.scalatest", "scalatest_2.11"),
         // JGraphT is used for its UnionFind data structure, which we use in
         // the type inference algorithm:
         "org.jgrapht" % "jgrapht-core" % "0.9.0",

@@ -62,12 +62,7 @@ object SATSolver extends Logging {
     logger.debug(s"Minimal SAT solutions are:\n${minimalModels.map(_.toString()).mkString("\n")}")
 
     minimalModels.flatMap { vars =>
-      val rawCrashes = vars.collect { case cf: CrashFailure => cf }
-      // strip out wildcards that may have arisen due to negative support tracking
-      // however, if this leaves the set of crashes empty, that won't do.
-
-      val crashes = rawCrashes.filter(c => c.node != ProvenanceReader.WILDCARD)
-      if (rawCrashes.size > 0) assert(crashes.size > 0)
+      val crashes = vars.collect { case cf: CrashFailure => cf }
       // If the seed contained a message loss, then it's possible that the SAT solver found
       // a solution where that message's sender crashes before that message loss.
       // Such message losses are redundant, so we'll remove them:
