@@ -2,6 +2,7 @@ package edu.berkeley.cs.boom.molly
 
 import java.io.File
 import scala.io.Source
+import pl.project13.scala.rainbow._
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.DedalusRewrites._
 import edu.berkeley.cs.boom.molly.DedalusParser._
