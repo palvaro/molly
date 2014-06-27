@@ -2,6 +2,7 @@ package edu.berkeley.cs.boom.molly
 
 import java.io.File
 import scala.io.Source
+import pl.project13.scala.rainbow._
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.DedalusRewrites._
 import edu.berkeley.cs.boom.molly.DedalusParser._
@@ -86,11 +87,24 @@ object SyncFTChecker extends Logging {
       .build()
 
     parser.parse(args, Config()) map { config =>
-      val results = check(config, metrics)
+      // Kind of a hack to tee an ephemeral stream
+      var firstCounterExample: FailureSpec = null
+      val results = check(config, metrics).map { case r =>
+        if (firstCounterExample == null && r.status == RunStatus("failure"))
+          firstCounterExample = r.failureSpec
+        r
+      }
       // TODO: name the output directory after the input filename and failure spec.
       HTMLWriter.write(new File("output"), Nil, results, config.generateProvenanceDiagrams,
         config.disableDotRendering)
+      println("-" * 80)
       metricsReporter.report()  // This appears after the HTML writing due to laziness
+      println("-" * 80)
+      firstCounterExample match {
+        case null => println("No counterexamples found".green)
+        case fs: FailureSpec =>
+          println(s"Found counterexamples; first is:\n${fs.crashes ++ fs.omissions}".red)
+      }
     } getOrElse {
       // Error messages
     }
