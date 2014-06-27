@@ -2,7 +2,7 @@ package edu.berkeley.cs.boom.molly
 
 import org.apache.commons.math3.util.ArithmeticUtils
 import edu.berkeley.cs.boom.molly.ast.{Program, IntLiteral, StringLiteral, Predicate}
-import edu.berkeley.cs.boom.molly.derivations.SATSolver.{MessageLoss, CrashFailure}
+import edu.berkeley.cs.boom.molly.derivations.{MessageLoss, CrashFailure}
 
 case class FailureSpec(
   eot: Int,

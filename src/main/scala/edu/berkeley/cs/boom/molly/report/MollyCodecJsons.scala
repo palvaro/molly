@@ -2,8 +2,7 @@ package edu.berkeley.cs.boom.molly.report
 
 import argonaut._, Argonaut._
 import edu.berkeley.cs.boom.molly.{Run, RunStatus, FailureSpec, UltimateModel}
-import edu.berkeley.cs.boom.molly.derivations.SATSolver.{MessageLoss, CrashFailure}
-import edu.berkeley.cs.boom.molly.derivations.Message
+import edu.berkeley.cs.boom.molly.derivations.{MessageLoss, CrashFailure, Message}
 
 /**
  * Argonaut CodecJsons for converting our objects to JSON;

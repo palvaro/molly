@@ -1,24 +1,24 @@
 package edu.berkeley.cs.boom.molly
 
-import edu.berkeley.cs.boom.molly.ast.Program
 import edu.berkeley.cs.boom.molly.wrappers.C4Wrapper
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.cs.boom.molly.derivations.{GoalNode, Message, SATSolver, ProvenanceReader}
+import edu.berkeley.cs.boom.molly.derivations._
 import java.util.concurrent.atomic.AtomicInteger
-import edu.berkeley.cs.boom.molly.derivations.SATSolver.SATVariable
 import com.codahale.metrics.MetricRegistry
 import nl.grons.metrics.scala.InstrumentedBuilder
 import scalaz._
 import scala.collection.mutable
-import edu.berkeley.cs.boom.molly.derivations.SATSolver.{MessageLoss, CrashFailure}
+import edu.berkeley.cs.boom.molly.derivations.{MessageLoss, CrashFailure, SolverVariable}
 import edu.berkeley.cs.boom.molly.symmetry.{SymmetryChecker, SymmetryAwareSet}
+import edu.berkeley.cs.boom.molly.derivations.Message
+import edu.berkeley.cs.boom.molly.ast.Program
 
 case class RunStatus(underlying: String) extends AnyVal
 case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, model: UltimateModel,
                messages: List[Message], provenance: List[GoalNode])
 
-class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  = false,
-               useSymmetry: Boolean = false, negativeSupport: Boolean = false)
+class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3Solver,
+               causalOnly: Boolean  = false, useSymmetry: Boolean = false, negativeSupport: Boolean = false)
               (implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
 
   private val failureFreeSpec = failureSpec.copy(eff = 0, maxCrashes = 0)
@@ -111,7 +111,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  
       logger.debug("THIS prov, " + tups.toString)
     }
     //logger.warn(s"all tups: $tups")
-    val satModels = SATSolver.solve(failureSpec, provenance, messages)
+    val satModels = solver.solve(failureSpec, provenance, messages)
     val failureFreeRun =
       Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, messages, provenance_orig)
     failureFreeRun ##:: doVerify(satModels.iterator)
@@ -155,9 +155,9 @@ class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  
     if (isGood(model)) {
       // This run may have used more channels than the original run; verify
       // that omissions on those new channels don't produce counterexamples:
-      val seed: Set[SATVariable] = failureSpec.crashes ++ failureSpec.omissions
+      val seed: Set[SolverVariable] = failureSpec.crashes ++ failureSpec.omissions
       val potentialCounterexamples =
-        SATSolver.solve(failureSpec, provenance, messages, seed) -- Set(failureSpec)
+        solver.solve(failureSpec, provenance, messages, seed) -- Set(failureSpec)
       val run =
         Run(runId.getAndIncrement, RunStatus("success"), failureSpec, model, messages, provenance_orig)
       (run, potentialCounterexamples)

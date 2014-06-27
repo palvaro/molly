@@ -28,7 +28,7 @@ class ProvenanceSuite extends FunSuite with Matchers {
       src |> parseProgram |> referenceClockRules |> splitAggregateRules |> addProvenanceRules |>  failureFreeSpec.addClockFacts |>  inferTypes
     val model = new C4Wrapper("agg_prov_test", program).run
     model.tables("counts").toSet should be (Set(List("loc", "A", "3", "1"), List("loc", "B", "1", "1")))
-    val provenance =  new ProvenanceReader(program, failureFreeSpec, model)
+    val provenance =  new ProvenanceReader(program, failureFreeSpec, model, negativeSupport = true)
     def aggContributors(goal: GoalTuple): Set[GoalNode] =
       provenance.getDerivationTree(goal).rules.head.subgoals
         .filter(t => t.tuple.table == "counts_vars" && !t.tuple.cols.contains(WILDCARD))
@@ -60,7 +60,7 @@ class ProvenanceSuite extends FunSuite with Matchers {
     val model = new C4Wrapper("agg_prov_test", program).run
     val goal = List("M", "2", "2")
     model.tables("vote_cnt").toSet should be (Set(goal))
-    val provenance =  new ProvenanceReader(program, failureFreeSpec, model)
+    val provenance =  new ProvenanceReader(program, failureFreeSpec, model, negativeSupport = true)
     def aggContributors(goal: GoalTuple): Set[GoalNode] =
       provenance.getDerivationTree(goal).rules.head.subgoals
         .filter(t => t.tuple.table == "vote_cnt_vars" && !t.tuple.cols.contains(WILDCARD))
