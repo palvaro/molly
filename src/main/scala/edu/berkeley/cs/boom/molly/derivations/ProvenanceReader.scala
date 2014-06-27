@@ -126,7 +126,7 @@ object ProvenanceReader {
  */
 class ProvenanceReader(program: Program,
                        failureSpec: FailureSpec,
-                       model: UltimateModel)
+                       model: UltimateModel, negativeSupport: Boolean)
                       (implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
   import ProvenanceReader._
   private val nextRuleNodeId = new AtomicInteger(0)
@@ -281,7 +281,12 @@ class ProvenanceReader(program: Program,
         if (goalTuple.negative) {
           positiveGoals.map(_.copy(negative = true)) ++ negativeGoals.map(_.copy(negative = false))
         } else {
-          positiveGoals.map(_.copy(negative = false)) ++ negativeGoals.map(_.copy(negative = true))
+          // I believe we only need to branch here.
+          if (negativeSupport) {
+            positiveGoals.map(_.copy(negative = false)) ++ negativeGoals.map(_.copy(negative = true))
+          } else {
+            positiveGoals.map(_.copy(negative = false))
+          }
         }
       RuleNode(nextRuleNodeId.getAndIncrement, provRule, subgoals.map(getDerivationTree).toSet)
     }

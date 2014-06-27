@@ -23,6 +23,7 @@ case class Config(
   generateProvenanceDiagrams: Boolean = false,
   disableDotRendering: Boolean = false,
   findAllCounterexamples: Boolean = false,
+  negativeSupport: Boolean = false,
   maxRuns: Int = Int.MaxValue
 )
 
@@ -38,6 +39,7 @@ object SyncFTChecker extends Logging {
     opt[Unit]("prov-diagrams") text "generate provenance diagrams for each execution" action { (x, c) => c.copy(generateProvenanceDiagrams = true) }
     opt[Unit]("disable-dot-rendering") text "disable automatic rendering of `dot` diagrams" action { (x, c) => c.copy(disableDotRendering = true) }
     opt[Unit]("find-all-counterexamples") text "continue after finding the first counterexample" action { (x, c) => c.copy(findAllCounterexamples = true) }
+    opt[Unit]("negative-support") text "Negative support.  Slow, but necessary for completeness" action {(x, c) => c.copy(negativeSupport =  true) }
     arg[File]("<file>...") unbounded() minOccurs 1 text "Dedalus files" action { (x, c) => c.copy(inputPrograms = c.inputPrograms :+ x)}
   }
 
@@ -62,7 +64,8 @@ object SyncFTChecker extends Logging {
     val includeSearchPath = config.inputPrograms(0).getParentFile
     val program = combinedInput |> parseProgramAndIncludes(includeSearchPath) |> referenceClockRules |> splitAggregateRules |> addProvenanceRules
     val failureSpec = FailureSpec(config.eot, config.eff, config.crashes, config.nodes.toList)
-    val verifier = new Verifier(failureSpec, program, causalOnly = (config.strategy == "pcausal"), useSymmetry = config.useSymmetry)(metrics)
+    val verifier = new Verifier(failureSpec, program, causalOnly = (config.strategy == "pcausal"),
+      useSymmetry = config.useSymmetry, negativeSupport = config.negativeSupport)(metrics)
     logger.info(s"Gross estimate: ${failureSpec.grossEstimate} runs")
     val results = config.strategy match {
       case "sat" => verifier.verify

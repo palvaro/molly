@@ -18,7 +18,7 @@ case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, mode
                messages: List[Message], provenance: List[GoalNode])
 
 class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  = false,
-               useSymmetry: Boolean = false)
+               useSymmetry: Boolean = false, negativeSupport: Boolean = false)
               (implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
 
   private val failureFreeSpec = failureSpec.copy(eff = 0, maxCrashes = 0)
@@ -102,7 +102,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  
 
   def verify: EphemeralStream[Run] = {
     val provenanceReader =
-      new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel)
+      new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel, negativeSupport)
     val messages = provenanceReader.getMessages
     val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
     val provenance = whichProvenance(provenanceReader, provenance_orig)
@@ -143,7 +143,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, causalOnly: Boolean  
     val failProgram = DedalusTyper.inferTypes(failureSpec.addClockFacts(program))
     val model = new C4Wrapper("with_errors", failProgram).run
     logger.info(s"'good' is ${model.tableAtTime("good", failureSpec.eot)}")
-    val provenanceReader = new ProvenanceReader(failProgram, failureSpec, model)
+    val provenanceReader = new ProvenanceReader(failProgram, failureSpec, model, negativeSupport)
     val messages = provenanceReader.getMessages
     val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
     val provenance = whichProvenance(provenanceReader, provenance_orig)
