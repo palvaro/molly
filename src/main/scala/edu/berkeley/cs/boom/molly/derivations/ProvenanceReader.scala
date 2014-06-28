@@ -194,7 +194,7 @@ class ProvenanceReader(program: Program,
       logger.debug(s"Found $goalTuple in EDB")
       return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
     }  else if (goalTuple.negative && tupleWasDerived) {
-      logger.debug(s"$goalTuple.table contains $goalTuple !!")
+      logger.debug(s"Prov. table for ${goalTuple.table} contains $goalTuple !!")
       return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple.copy(tombstone = true), Set.empty)
       // if it's a neg tuple, discharge it.
     }

@@ -17,7 +17,11 @@ object ProvenanceDiagramGenerator extends GraphvizPrettyPrinter {
 
   private def dotStatements(goal: GoalNode): List[Doc] = {
     val id = "goal" + goal.id
-    val goalNode = node(id, "label" -> goal.tuple.toString)
+    val goalNode = node(id,
+      "label" -> goal.tuple.toString,
+      "style" -> (if (goal.tuple.tombstone) "dashed" else "filled"),
+      "fontcolor" -> (if (goal.tuple.negative && !goal.tuple.tombstone) "white" else "black"),
+      "fillcolor" -> (if (goal.tuple.negative) "black" else "white"))
     val edges = goal.rules.map(rule => diEdge(id, "rule" + rule.id))
     List(goalNode) ++ edges ++ goal.rules.flatMap(dotStatements)
   }
