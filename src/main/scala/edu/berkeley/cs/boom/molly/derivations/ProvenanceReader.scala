@@ -310,23 +310,28 @@ class ProvenanceReader(program: Program,
     // Find provenance tables that might explain how we derived `goalTuple`:
     val provTables = program.tables.map(_.name).filter(_.matches(s"^${goalTuple.table}_prov\\d+"))
     logger.debug(s"Table '${goalTuple.table}' has provenance tables $provTables")
-    // Check which of them have matching facts:
     if (goalTuple.negative) {
-      provTables.map { table =>
-        val res = searchProvTable(goalTuple.cols, model.tables(table))
-        logger.debug(s"res $res.  prov table schema is $table ")
-        val provRule = program.rules.find(_.head.tableName == table).get
-        val cols = if (provRule.head.time.isDefined && goalTuple.cols.last != ProvenanceReader.WILDCARD) {
+      for (
+        table <- provTables;
+        provRule = program.rules.find(_.head.tableName == table).get;
+        cols = if (provRule.head.time.isDefined && goalTuple.cols.last != WILDCARD) {
           // unless time itself is a wildcard (in which case, what do?)  keep it on
           goalTuple.cols.init ++ List((goalTuple.cols.last.toInt - 1).toString)
         } else {
           goalTuple.cols
         }
-        (table, res, cols)
-      }.filter(x => !x._2.isDefined && (x._3.last == ProvenanceReader.WILDCARD || x._3.last.toInt > 0)).map(x => (x._1, x._3))
+        if searchProvTable(goalTuple.cols, model.tables(table)).isEmpty
+        if cols.last == WILDCARD || cols.last.toInt > 0
+      ) yield {
+        (table, cols)
+      }
     } else {
-      provTables.map(table => (table, searchProvTable(goalTuple.cols, model.tables(table))))
-        .filter(_._2.isDefined).map(x => (x._1, x._2.get))
+      for (
+        table <- provTables;
+        cols <- searchProvTable(goalTuple.cols, model.tables(table))
+      ) yield {
+        (table, cols)
+      }
     }
   }
 
@@ -371,7 +376,7 @@ class ProvenanceReader(program: Program,
   }
 
   private def searchProvTable(target: List[String], provFacts: List[List[String]]):
-    Option[List[String]] = {
+    List[List[String]] = {
     // The provenance tables record _all_ variable bindings used in the rule firing, not just those
     // that appear in the rule head, so the provenance table's schema won't necessarily match the
     // original table.  Because of how we perform the rewriting, the two tables agree on the first
@@ -380,6 +385,6 @@ class ProvenanceReader(program: Program,
     def matchesTarget(fact: List[String]): Boolean = {
       matchesPattern(target)(fact.take(target.size - 1) ++ List(fact.last))
     }
-    provFacts.find(matchesTarget)
+    provFacts.filter(matchesTarget)
   }
 }
