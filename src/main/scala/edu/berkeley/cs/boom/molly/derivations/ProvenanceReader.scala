@@ -188,40 +188,27 @@ class ProvenanceReader(program: Program,
 
   private def buildDerivationTree(goalTuple: GoalTuple): GoalNode = {
     logger.debug(s"Reading provenance for tuple $goalTuple")
-    val tupleWasDerived = model.tables(goalTuple.table).contains(goalTuple.cols)
+    val tupleWasDerived = model.tables(goalTuple.table).exists(matchesPattern(goalTuple.cols))
     // First, check whether the goal tuple is part of the EDB:
-    if (isInEDB(goalTuple)) {
-      logger.debug(s"Found $goalTuple in EDB")
-      return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
-    }  else if (goalTuple.negative && tupleWasDerived) {
+    if (goalTuple.negative && tupleWasDerived) {
       logger.debug(s"Prov. table for ${goalTuple.table} contains $goalTuple !!")
       return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple.copy(tombstone = true), Set.empty)
       // if it's a neg tuple, discharge it.
+    } else if (isInEDB(goalTuple)) {
+      logger.debug(s"Found $goalTuple in EDB")
+      return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
     }
-
     // Otherwise, a rule must have derived it:
     val ruleFirings = findRuleFirings(goalTuple)
     if (goalTuple.negative) {
-      logger.debug(s"NEG ($goalTuple) anti-rf $ruleFirings")
       if (ruleFirings.isEmpty) return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
-      logger.debug(s"$goalTuple FALLTHRU")
+      logger.debug(s"Negative goal $goalTuple has potential firings; falling through to explore them")
     } else if (ruleFirings.isEmpty && tupleWasDerived) {
       throw new IllegalStateException(s"Couldn't find rules to explain derivation of $goalTuple")
     }
-    logger.debug(s"Rule firings: $ruleFirings")
-    val ruleNodes = ruleFirings.map { case (provRuleName, provTableRow) =>
-      val provRule = program.rules.find(_.head.tableName == provRuleName).get
-      val bindings = provRowToVariableBindings(provRule, provTableRow)
-      logger.debug(s"look up for $provRule AND $provTableRow")
-      // PAA
-      //val time = bindings("NRESERVED").toInt
-      logger.debug(s"bindings: $bindings")
-      val timevar = bindings.getOrElse("NRESERVED", "-1")
-      if (timevar == ProvenanceReader.WILDCARD) {
-        // punt on this for now.
-        return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
-      }
-      val time = timevar.toInt
+    val ruleNodes = ruleFirings.map { case (provRule, bindings) =>
+      logger.debug(s"Exploring firing of ${provRule.head.tableName} with bindings $bindings")
+      val time = bindings("NRESERVED").toInt
 
       // Substitute the variable bindings to determine the set of goals used by this rule.
       def substituteBindings(pred: Predicate): GoalTuple = {
@@ -306,7 +293,12 @@ class ProvenanceReader(program: Program,
     }
   }
 
-  private def findRuleFirings(goalTuple: GoalTuple): Set[(String, List[String])] = {
+  /**
+   * Find all rule firings that might explain how we derived `goalTuple` and return
+   * the matching rules and variable bindings extracted from the provenance table entries.
+   */
+  private def findRuleFirings(goalTuple: GoalTuple): Set[(Rule, Map[String, String])] = {
+    assert(goalTuple.cols.last != WILDCARD, "Time shouldn't be a wildcard")
     // Find provenance tables that might explain how we derived `goalTuple`:
     val provTables = program.tables.map(_.name).filter(_.matches(s"^${goalTuple.table}_prov\\d+"))
     logger.debug(s"Table '${goalTuple.table}' has provenance tables $provTables")
@@ -314,23 +306,24 @@ class ProvenanceReader(program: Program,
       for (
         table <- provTables;
         provRule = program.rules.find(_.head.tableName == table).get;
-        cols = if (provRule.head.time.isDefined && goalTuple.cols.last != WILDCARD) {
-          // unless time itself is a wildcard (in which case, what do?)  keep it on
-          goalTuple.cols.init ++ List((goalTuple.cols.last.toInt - 1).toString)
-        } else {
-          goalTuple.cols
-        }
+        isAsync = provRule.head.time == Some(Async());
+        time = if (isAsync) goalTuple.cols.last.toInt - 1 else goalTuple.cols.last.toInt
+        if time > 0
         if searchProvTable(goalTuple.cols, model.tables(table)).isEmpty
-        if cols.last == WILDCARD || cols.last.toInt > 0
       ) yield {
-        (table, cols)
+        val nonTimeColNames = provRule.head.cols.take(goalTuple.cols.size - 1)
+        val bindings = nonTimeColNames.zip(goalTuple.cols.init).collect {
+          case (Identifier(ident), provValue) => (ident, provValue)
+        } ++ List("_" -> WILDCARD, "NRESERVED" -> time.toString, "MRESERVED" -> (time + 1).toString)
+        (provRule, bindings.toMap)
       }
     } else {
       for (
         table <- provTables;
+        provRule = program.rules.find(_.head.tableName == table).get;
         cols <- searchProvTable(goalTuple.cols, model.tables(table))
       ) yield {
-        (table, cols)
+        (provRule, provRowToVariableBindings(provRule, cols))
       }
     }
   }
@@ -368,7 +361,7 @@ class ProvenanceReader(program: Program,
     // In these cases, we might need to invert that arithmetic to find the actual variable binding.
     // Fortunately, the current method of generating the provenance rules ensures that those
     // bindings will also be recorded in the head, so we can just skip over expressions:
-    //require(provRule.head.cols.size == provTableRow.size, s"Incorrect number of columns $provRule.head vs $provTableRow")
+    require(provRule.head.cols.size == provTableRow.size, s"Incorrect number of columns $provRule.head vs $provTableRow")
     val bindings = provRule.head.cols.zip(provTableRow).collect {
       case (Identifier(ident), provValue) => (ident, provValue)
     } ++ List("_" -> WILDCARD)
