@@ -6,12 +6,16 @@ import scala.language.implicitConversions
 import nl.grons.metrics.scala.MetricBuilder
 import z3.scala._
 
+
 object Z3Solver extends Solver {
 
   protected def solve(failureSpec: FailureSpec, goal: GoalNode,
                     firstMessageSendTimes: Map[String, Int], seed: Set[SolverVariable])
                    (implicit metrics: MetricBuilder):
     Traversable[Set[SolverVariable]] = {
+
+    val encoding = metrics.timer("encoding")
+    val solving = metrics.timer("solving")
 
     // Crash failures:
     // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
@@ -102,7 +106,7 @@ object Z3Solver extends Solver {
     }
 
     implicit val solver = z3.mkSolver()
-    solver.assertCnstr(goalToZ3(goal))
+    encoding.time{ solver.assertCnstr(goalToZ3(goal)) }
 
     // Assume any message losses that have already occurred
     for (assumption <- seed) {
@@ -152,7 +156,7 @@ object Z3Solver extends Solver {
     val allModels: Seq[Set[SolverVariable]] = {
       val results = mutable.ArrayBuffer[Set[SolverVariable]]()
       while (true) {
-        solver.check()
+        solving.time{ solver.check() }
         if (solver.isModelAvailable) {
           val model = solver.getModel()
           val allModelVars = modelToVars(model)
