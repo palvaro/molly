@@ -16,6 +16,7 @@ object Z3Solver extends Solver {
 
     val encoding = metrics.timer("encoding")
     val solving = metrics.timer("solving")
+    val iterations = metrics.counter("iterations")
 
     // Crash failures:
     // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
@@ -49,6 +50,7 @@ object Z3Solver extends Solver {
     }
 
     def goalToZ3(goal: GoalNode): Z3AST = {
+      iterations.inc()
       if (goal.rules.isEmpty) {
         goal.ownImportantClock match {
           case None => z3.mkFalse()
