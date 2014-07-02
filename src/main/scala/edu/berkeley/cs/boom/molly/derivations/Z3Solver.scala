@@ -5,6 +5,7 @@ import scala.collection.mutable
 import scala.language.implicitConversions
 import nl.grons.metrics.scala.MetricBuilder
 import z3.scala._
+import scalaz._
 
 
 object Z3Solver extends Solver {
@@ -49,7 +50,7 @@ object Z3Solver extends Solver {
       id
     }
 
-    def goalToZ3(goal: GoalNode): Z3AST = {
+    def goalToZ3Internal(goal: GoalNode): Z3AST = {
       iterations.inc()
       if (goal.rules.isEmpty) {
         goal.ownImportantClock match {
@@ -70,6 +71,9 @@ object Z3Solver extends Solver {
         z3.mkAnd(ruleASTs: _*)
       }
     }
+
+    lazy val goalToZ3: GoalNode => Z3AST =
+      Memo.mutableHashMapMemo(goalToZ3Internal(_))
 
     def ruleToZ3(rule: RuleNode): Z3AST = {
       val subgoalASTs = rule.subgoals.toSeq.map(goalToZ3)
