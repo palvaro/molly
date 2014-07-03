@@ -12,8 +12,53 @@ import com.codahale.metrics.MetricRegistry
 
 
 class ProvenanceSuite extends FunSuite with Matchers {
-  test("Aggregate provenance is computed correctly") {
+
+  private def getFailureFreeProv(src: String,
+                                 negativeSupport: Boolean = false,
+                                 nodes: List[String] = List("loc")): (UltimateModel, ProvenanceReader) = {
     implicit val metricRegistry = new MetricRegistry()
+    val failureFreeSpec = FailureSpec(2, 0, 0, nodes, Set.empty)
+    val program =
+      src |> parseProgram |> referenceClockRules |> splitAggregateRules |> addProvenanceRules |>  failureFreeSpec.addClockFacts |>  inferTypes
+    val model = new C4Wrapper("prov_suite", program).run
+    val provReader = new ProvenanceReader(program, failureFreeSpec, model, negativeSupport)
+    (model, provReader)
+  }
+
+  test("Repeat rule firings with different contributing tuples (missing fields are part of join)") {
+    // The field that does not appear in the head is part of a join key:
+    val src =
+      """
+        | a("loc", "x", 1)@1;
+        | a("loc", "y", 1)@1;
+        | b("loc", "x", 1)@1;
+        | b("loc", "y", 1)@1;
+        | c(L, V) :- b(L, M, V), a(L, M, V);
+      """.stripMargin
+    val (model, provReader) = getFailureFreeProv(src, negativeSupport = false)
+    model.tables("c").toSet should be(Set(List("loc", "1", "1")))
+    val goalProv = provReader.getDerivationTree(GoalTuple("c", List("loc", "1", "1")))
+    goalProv.rules.size should be (2)
+  }
+
+  test("Repeat rule firings with different contributing tuples (missing fields are not joined)") {
+    // The field that does not appear in the head is NOT involved in a join:
+    val src =
+      """
+        | a("loc", "x", 1)@1;
+        | a("loc", "y", 1)@1;
+        | proxy("loc", A, B) :- a(L, A, B);
+        | b("loc", 1)@1;
+        | c(L, V) :- b(L, V), proxy(L, _, V);
+      """.stripMargin
+    val (model, provReader) = getFailureFreeProv(src, negativeSupport = false)
+    model.tables("c").toSet should be(Set(List("loc", "1", "1")))
+    val goalProv = provReader.getDerivationTree(GoalTuple("c", List("loc", "1", "1")))
+    println(goalProv)
+    goalProv.enumerateDistinctDerivations.size should be (2)
+  }
+
+  test("Aggregate provenance is computed correctly") {
     val src =
       """
         | fact("loc", "A", 100)@1;
@@ -23,14 +68,10 @@ class ProvenanceSuite extends FunSuite with Matchers {
         | derived(X, Y, Z) :- fact(X, Y, Z);
         | counts(L, A, count<B>) :- derived(L, A, B);
       """.stripMargin
-    val failureFreeSpec = FailureSpec(1, 0, 0, List("loc"), Set.empty)
-    val program =
-      src |> parseProgram |> referenceClockRules |> splitAggregateRules |> addProvenanceRules |>  failureFreeSpec.addClockFacts |>  inferTypes
-    val model = new C4Wrapper("agg_prov_test", program).run
+    val (model, provReader) = getFailureFreeProv(src, negativeSupport = true)
     model.tables("counts").toSet should be (Set(List("loc", "A", "3", "1"), List("loc", "B", "1", "1")))
-    val provenance =  new ProvenanceReader(program, failureFreeSpec, model, negativeSupport = true)
     def aggContributors(goal: GoalTuple): Set[GoalNode] =
-      provenance.getDerivationTree(goal).rules.head.subgoals
+      provReader.getDerivationTree(goal).rules.head.subgoals
         .filter(t => t.tuple.table == "counts_vars" && !t.tuple.cols.contains(WILDCARD))
     aggContributors(GoalTuple("counts", List("loc", "A", "3", "1"))).size should be (3)
     aggContributors(GoalTuple("counts", List("loc", "B", "1", "1"))).size should be (1)
@@ -38,7 +79,6 @@ class ProvenanceSuite extends FunSuite with Matchers {
 
   test("Aggregate rewrites don't affect grouping by including un-aggregated variables") {
     // Regression test
-    implicit val metricRegistry = new MetricRegistry()
     val src =
       """
         | vote(M, V)@next :- vote(M, V);
@@ -54,15 +94,12 @@ class ProvenanceSuite extends FunSuite with Matchers {
         | begin("a", "M")@1;
         | begin("b", "M")@1;
       """.stripMargin
-    val failureFreeSpec = FailureSpec(2, 0, 0, List("a", "b", "M"), Set.empty)
-    val program =
-      src |> parseProgram |> referenceClockRules |> splitAggregateRules |> addProvenanceRules |>  failureFreeSpec.addClockFacts |>  inferTypes
-    val model = new C4Wrapper("agg_prov_test", program).run
+    val (model, provReader) =
+      getFailureFreeProv(src, negativeSupport = true, nodes = List("a", "b", "M"))
     val goal = List("M", "2", "2")
     model.tables("vote_cnt").toSet should be (Set(goal))
-    val provenance =  new ProvenanceReader(program, failureFreeSpec, model, negativeSupport = true)
     def aggContributors(goal: GoalTuple): Set[GoalNode] =
-      provenance.getDerivationTree(goal).rules.head.subgoals
+      provReader.getDerivationTree(goal).rules.head.subgoals
         .filter(t => t.tuple.table == "vote_cnt_vars" && !t.tuple.cols.contains(WILDCARD))
     aggContributors(GoalTuple("vote_cnt", goal)).size should be (2)
   }
