@@ -25,6 +25,25 @@ class ProvenanceSuite extends FunSuite with Matchers {
     (model, provReader)
   }
 
+  test("Basic negative provenance") {
+    // A contrived example of a program that requires negative provenance:
+    val src =
+      """
+        | node("master", "worker")@1;
+        | node("worker", "master")@1;
+        | node(X, Y)@next :- node(X, Y);
+        |
+        | good(L, X) :- node(L, X), notin bad(L, X);
+        | good(L, X)@next :- good(L, X);
+        | bad(L, X) :- node(L, X), notin has_msg(L, X);
+        | has_msg(L, X)@async :- node(X, L);
+      """.stripMargin
+    val (model, provReader) = getFailureFreeProv(src, negativeSupport = true,
+      nodes = List("master" , "worker"))
+    val goal = provReader.getDerivationTree(GoalTuple("good", List("master", "worker", "2")))
+    goal.importantClocks should be (Set(("worker", "master", 1)))
+  }
+
   test("Repeat rule firings with different contributing tuples (missing fields are part of join)") {
     // The field that does not appear in the head is part of a join key:
     val src =
@@ -41,7 +60,7 @@ class ProvenanceSuite extends FunSuite with Matchers {
     goalProv.rules.size should be (2)
   }
 
-  test("Repeat rule firings with different contributing tuples (missing fields are not joined)") {
+  test("Repeat rule firings with different contributing tuples (missing fields are wildcards)") {
     // The field that does not appear in the head is NOT involved in a join:
     val src =
       """
@@ -54,7 +73,6 @@ class ProvenanceSuite extends FunSuite with Matchers {
     val (model, provReader) = getFailureFreeProv(src, negativeSupport = false)
     model.tables("c").toSet should be(Set(List("loc", "1", "1")))
     val goalProv = provReader.getDerivationTree(GoalTuple("c", List("loc", "1", "1")))
-    println(goalProv)
     goalProv.enumerateDistinctDerivations.size should be (2)
   }
 
