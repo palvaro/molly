@@ -49,8 +49,11 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
   }
 
   def random: EphemeralStream[Run] = {
+    val provenanceReader =
+      new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel, negativeSupport)
+    val messages = provenanceReader.getMessages
     val failureFreeRun =
-      Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, Nil, Nil)
+      Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, messages, Nil)
     failureFreeRun ##:: doRandom
   }
 
@@ -91,11 +94,13 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
     val randomSpec = originalSpec.copy(crashes = crashes.toSet, omissions = messageLoss.toSet)
     val failProgram = DedalusTyper.inferTypes(randomSpec.addClockFacts(program))
     val model = new C4Wrapper("with_errors", failProgram).run
+    val provenanceReader = new ProvenanceReader(failProgram, randomSpec, model, negativeSupport)
+    val messages = provenanceReader.getMessages
     if (isGood(model)) {
-      Run(runId.getAndIncrement, RunStatus("success"), randomSpec, model, Nil, Nil)
+      Run(runId.getAndIncrement, RunStatus("success"), randomSpec, model, messages, Nil)
     } else {
       logger.warn("Found counterexample: " + randomSpec)
-      Run(runId.getAndIncrement, RunStatus("failure"), randomSpec, model, Nil, Nil)
+      Run(runId.getAndIncrement, RunStatus("failure"), randomSpec, model, messages, Nil)
     }
   }
       
