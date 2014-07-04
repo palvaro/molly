@@ -41,6 +41,7 @@ object HTMLWriter {
 
   def write(outputDirectory: File, originalPrograms: List[File], runs: EphemeralStream[Run],
             generateProvenanceDiagrams: Boolean, disableDotRendering: Boolean = false) = {
+    outputDirectory.listFiles().map(_.delete())
     outputDirectory.mkdirs()
     require (outputDirectory.isDirectory)
     copyTemplateFiles(outputDirectory)
