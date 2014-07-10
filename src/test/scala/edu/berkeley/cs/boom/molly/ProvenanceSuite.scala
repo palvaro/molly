@@ -44,6 +44,26 @@ class ProvenanceSuite extends FunSuite with Matchers {
     goal.importantClocks should be (Set(("worker", "master", 1)))
   }
 
+  test("Negative provenance with 'bad if missing message'") {
+    val src =
+      """
+        | node("master", "master")@1;
+        | node("worker1", "master")@1;
+        | node("worker2", "master")@1;
+        | node(X, Y)@next :- node(X, Y);
+        |
+        | has_msg(L, X)@async :- node(X, L), X != L;
+        |
+        | good(L) :- notin bad(L), L == "master";
+        | bad(L) :- has_msg(L, X), notin has_msg(L, Y), X != Y, node(Y, _), Y != "master";
+      """.stripMargin
+    val (model, provReader) = getFailureFreeProv(src, negativeSupport = true,
+      nodes = List("master", "worker1", "worker2"))
+    val goal = provReader.getDerivationTree(GoalTuple("good", List("master", "2")))
+    val derivations = goal.enumerateDistinctDerivations.map(_.importantClocks)
+    derivations should be (Set(Set(("worker1", "master", 1)), Set(("worker2", "master", 1))))
+  }
+
   test("Repeat rule firings with different contributing tuples (missing fields are part of join)") {
     // The field that does not appear in the head is part of a join key:
     val src =

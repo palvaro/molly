@@ -266,20 +266,41 @@ class ProvenanceReader(program: Program,
       }
 
       // Recursively compute the provenance of the new goals:
-      val subgoals =
+      if (negativeSupport) {
         if (goalTuple.negative) {
-          positiveGoals.map(_.copy(negative = true)) ++ negativeGoals.map(_.copy(negative = false))
+          // We're considering a "rule firing" that describes a potential way in which a positive
+          // goalTuple could have been derived.  By applying DeMorgan's law to this firing, we
+          // produce one rule per subgoal describing how goalTuple couldn't have been derived
+          // through application of THIS rule.
+          val subgoals = positiveGoals.map(_.copy(negative = true)) ++ negativeGoals.map(_.copy(negative = false))
+          // TODO: possibly a more meaningful choice of provRule here?
+          subgoals.map(sg => RuleNode(nextRuleNodeId.getAndIncrement, provRule, Set(getDerivationTree(sg)))).toSet
         } else {
-          // I believe we only need to branch here.
-          if (negativeSupport) {
-            positiveGoals.map(_.copy(negative = false)) ++ negativeGoals.map(_.copy(negative = true))
-          } else {
-            positiveGoals.map(_.copy(negative = false))
-          }
+          val subgoals = positiveGoals.map(_.copy(negative = false)) ++ negativeGoals.map(_.copy(negative = true))
+          Set(RuleNode(nextRuleNodeId.getAndIncrement, provRule, subgoals.map(getDerivationTree).toSet))
         }
-      RuleNode(nextRuleNodeId.getAndIncrement, provRule, subgoals.map(getDerivationTree).toSet)
+      } else { // If negative provenance is disabled, just ignore negative subgoals.
+        val subgoals = positiveGoals.map(_.copy(negative = false))
+        Set(RuleNode(nextRuleNodeId.getAndIncrement, provRule, subgoals.map(getDerivationTree).toSet))
+      }
     }
-    RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes)
+    if (negativeSupport && goalTuple.negative) {
+      // Negative subgoals involve an interesting duality: NOT(A) is a goal that's derived through
+      // a single rule whose subgoals represent the non-derivation of A through particular rules.
+      // So, a particular rule may fail to derive A for any one of several reasons and every such
+      // potential rule firing must fail to occur.
+      val nonFiringsOfSubgoals = ruleNodes.map { causesOfNonFiring =>
+        // TODO: cleanup of internal special goal tuples, or maybe make new goal node types
+        RealGoalNode(nextGoalNodeId.getAndIncrement, GoalTuple("AllfiringsFail", Nil), causesOfNonFiring)
+      }
+      val dummyRule = program.rules.head.copy(program.rules.head.head.copy("AllFiringsFail"))
+      // ^^^ TODO: _terrible_ hack; should put in a real rule or allow
+      // for rule nodes that don't correspond to program rules
+      val failureOfAllRules = RuleNode(nextRuleNodeId.getAndIncrement, dummyRule, nonFiringsOfSubgoals.toSet)
+      RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set(failureOfAllRules))
+    } else {
+      RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes.flatten)
+    }
   }
 
   private def getContributingMessages(tuple: GoalTuple): Set[GoalTuple] = {
