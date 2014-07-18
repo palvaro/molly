@@ -51,7 +51,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
   def random: EphemeralStream[Run] = {
     val provenanceReader =
       new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel, negativeSupport)
-    val messages = provenanceReader.getMessages
+    val messages = provenanceReader.messages
     val failureFreeRun =
       Run(runId.getAndIncrement, RunStatus("success"), failureSpec, failureFreeUltimateModel, messages, Nil)
     failureFreeRun ##:: doRandom
@@ -95,7 +95,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
     val failProgram = DedalusTyper.inferTypes(randomSpec.addClockFacts(program))
     val model = new C4Wrapper("with_errors", failProgram).run
     val provenanceReader = new ProvenanceReader(failProgram, randomSpec, model, negativeSupport)
-    val messages = provenanceReader.getMessages
+    val messages = provenanceReader.messages
     if (isGood(model)) {
       Run(runId.getAndIncrement, RunStatus("success"), randomSpec, model, messages, Nil)
     } else {
@@ -108,7 +108,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
   def verify: EphemeralStream[Run] = {
     val provenanceReader =
       new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel, negativeSupport)
-    val messages = provenanceReader.getMessages
+    val messages = provenanceReader.messages
     val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
     val provenance = whichProvenance(provenanceReader, provenance_orig)
     provenance.foreach{ p =>
@@ -149,7 +149,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
     val model = new C4Wrapper("with_errors", failProgram).run
     logger.info(s"'good' is ${model.tableAtTime("good", failureSpec.eot)}")
     val provenanceReader = new ProvenanceReader(failProgram, failureSpec, model, negativeSupport)
-    val messages = provenanceReader.getMessages
+    val messages = provenanceReader.messages
     val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
     val provenance = whichProvenance(provenanceReader, provenance_orig)
     provenance.foreach{ p =>

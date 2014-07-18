@@ -6,7 +6,6 @@ import edu.berkeley.cs.boom.molly.ast.StringLiteral
 import edu.berkeley.cs.boom.molly.ast.Rule
 import edu.berkeley.cs.boom.molly.{FailureSpec, UltimateModel}
 import edu.berkeley.cs.boom.molly.ast.Identifier
-import scala.Some
 import edu.berkeley.cs.boom.molly.ast.Program
 import java.util.concurrent.atomic.AtomicInteger
 import scalaz._
@@ -17,6 +16,18 @@ import scala.collection.immutable._
 
 object ProvenanceReader {
   val WILDCARD = "__WILDCARD__"
+
+  /**
+   * Check tuples for compatibility while accounting for wildcards.
+   */
+  def matchesPattern(goal: List[String])(tuple: List[String]): Boolean = {
+    require(goal.size == tuple.size, "Mismatched sizes")
+    goal.zip(tuple).forall {
+      case (a, WILDCARD) => true
+      case (WILDCARD, b) => true
+      case (x, y) => x == y
+    }
+  }
 }
 
 /**
@@ -30,9 +41,9 @@ class ProvenanceReader(program: Program,
   private val nextRuleNodeId = new AtomicInteger(0)
   private val nextGoalNodeId = new AtomicInteger(0)
 
-  val messages = getMessages
-
   private val derivationBuilding = metrics.timer("derivation-tree-building")
+
+  private val provTableManager = new ProvenanceTableManager(program, model, failureSpec)
 
   val getDerivationTree: GoalTuple => GoalNode =
     Memo.mutableHashMapMemo { derivationBuilding.time { buildDerivationTree(_) }}
@@ -51,30 +62,7 @@ class ProvenanceReader(program: Program,
     model.tableAtTime(goal, failureSpec.eot).map(GoalTuple(goal, _)).map(getPhonyDerivationTree)
   }
 
-  def getMessages: List[Message] = {
-    val tableNamePattern = """^(.*)_prov\d+$""".r
-    def isProvRule(rule: Rule): Boolean =
-      tableNamePattern.findFirstMatchIn(rule.head.tableName).isDefined
-      val asyncRules = program.rules.filter(isProvRule).filter(_.head.time == Some(Async()))
-      logger.debug(s"Async rules are ${asyncRules.map(_.head.tableName)}")
-      asyncRules.flatMap { rule =>
-      val clockPred = rule.bodyPredicates.filter(_.tableName == "clock")(0)
-      val fromIdent = clockPred.cols(0).asInstanceOf[Identifier].name
-      val toIdent = clockPred.cols(1).asInstanceOf[Identifier].name
-      val tableName = tableNamePattern.findFirstMatchIn(rule.head.tableName).get.group(1)
-      model.tables(rule.head.tableName).flatMap { tuple =>
-        val bindings = provRowToVariableBindings(rule, tuple)
-        val from = bindings(fromIdent)
-        val to = bindings(toIdent)
-        val sendTime = bindings("NRESERVED").toInt
-        val receiveTime = bindings("MRESERVED").toInt
-        if (sendTime != failureSpec.eot)
-          Some(Message(tableName, from, to, sendTime, receiveTime))
-        else
-          None
-      }
-    }
-  }
+  val messages: List[Message] = provTableManager.messages
 
   private def buildPhonyDerivationTree(goalTuple: GoalTuple): PhonyGoalNode = {
     val msgs = getContributingMessages(goalTuple)
@@ -195,7 +183,7 @@ class ProvenanceReader(program: Program,
       val failureOfAllRules = RuleNode(nextRuleNodeId.getAndIncrement, dummyRule, nonFiringsOfSubgoals.toSet)
       RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set(failureOfAllRules))
     } else {
-      RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes.flatten)
+      RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes.flatten.toSet)
     }
   }
 
@@ -214,34 +202,23 @@ class ProvenanceReader(program: Program,
    * Find all rule firings that might explain how we derived `goalTuple` and return
    * the matching rules and variable bindings extracted from the provenance table entries.
    */
-  private def findRuleFirings(goalTuple: GoalTuple): Set[(Rule, Map[String, String])] = {
+  private def findRuleFirings(goalTuple: GoalTuple): Seq[(Rule, Map[String, String])] = {
     assert(goalTuple.cols.last != WILDCARD, "Time shouldn't be a wildcard")
-    // Find provenance tables that might explain how we derived `goalTuple`:
-    val provTables = program.tables.map(_.name).filter(_.matches(s"^${goalTuple.table}_prov\\d+"))
-    logger.debug(s"Table '${goalTuple.table}' has provenance tables $provTables")
     if (goalTuple.negative) {
       for (
-        table <- provTables;
-        provRule = program.rules.find(_.head.tableName == table).get;
-        isAsync = provRule.head.time == Some(Async());
-        time = if (isAsync) goalTuple.cols.last.toInt - 1 else goalTuple.cols.last.toInt
+        table <- provTableManager.provTables.getOrElse(goalTuple.table, Seq.empty);
+        time = if (table.rule.isAsync) goalTuple.cols.last.toInt - 1 else goalTuple.cols.last.toInt
         if time > 0
-        if searchProvTable(goalTuple.cols, model.tables(table)).isEmpty
+        if table.search(goalTuple.cols).isEmpty
       ) yield {
-        val nonTimeColNames = provRule.head.cols.take(goalTuple.cols.size - 1)
+        val nonTimeColNames = table.rule.head.cols.take(goalTuple.cols.size - 1)
         val bindings = nonTimeColNames.zip(goalTuple.cols.init).collect {
           case (Identifier(ident), provValue) => (ident, provValue)
         } ++ List("_" -> WILDCARD, "NRESERVED" -> time.toString, "MRESERVED" -> (time + 1).toString)
-        (provRule, bindings.toMap)
+        (table.rule, bindings.toMap)
       }
     } else {
-      for (
-        table <- provTables;
-        provRule = program.rules.find(_.head.tableName == table).get;
-        cols <- searchProvTable(goalTuple.cols, model.tables(table))
-      ) yield {
-        (provRule, provRowToVariableBindings(provRule, cols))
-      }
+      provTableManager.search(goalTuple)
     }
   }
 
@@ -257,20 +234,26 @@ class ProvenanceReader(program: Program,
     }
   }
 
-  /**
-   * Check tuples for compatibility while accounting for wildcards.
-   */
-  private def matchesPattern(goal: List[String])(tuple: List[String]): Boolean = {
-    require(goal.size == tuple.size, "Mismatched sizes")
-    goal.zip(tuple).forall {
-      case (a, WILDCARD) => true
-      case (WILDCARD, b) => true
-      case (x, y) => x == y
-    }
-  }
+}
 
-  private def provRowToVariableBindings(provRule: Rule, provTableRow: List[String]):
-    Map[String, String] = {
+
+class ProvenanceTableManager(program: Program, model: UltimateModel, failureSpec: FailureSpec)
+  extends Logging {
+  import ProvenanceReader._
+
+  private val tableNamePattern = """^(.*)_prov\d+$""".r
+  private def isProvRule(rule: Rule): Boolean =
+    tableNamePattern.findFirstMatchIn(rule.head.tableName).isDefined
+  val provRules = program.rules.filter(isProvRule)
+  val provTables: Map[String, Seq[ProvenanceTable]] = provRules.map { rule =>
+    val provRuleName = rule.head.tableName
+    val provTableEntries = model.tables(provRuleName)
+    ProvenanceTable(rule, provTableEntries)
+  }.groupBy(t => tableNamePattern.findFirstMatchIn(t.rule.head.tableName).get.group(1))
+
+  logger.debug(s"Provenance tables are: ${provTables.mapValues(_.map(x => x.rule.head.tableName))}")
+
+  private def provRowToVariableBindings(provRule: Rule, provTableRow: List[String]):  Map[String, String] = {
     // Given a row from the provenance table, we need to reconstruct the variable bindings.
     // Most of the time there will be a 1-to-1 mapping between row values and variable
     // binding values, but in some cases rules may have arithmetic in the head, such as
@@ -285,16 +268,56 @@ class ProvenanceReader(program: Program,
     bindings.toMap
   }
 
-  private def searchProvTable(target: List[String], provFacts: List[List[String]]):
-    List[List[String]] = {
+  /**
+   * Search all provenance tables for entries that match the given goal tuple and return
+   * any matching rules and the bindings derived from them.
+   */
+  def search(goal: GoalTuple): Seq[(Rule, Map[String, String])] = {
+    for (
+      provTable <- provTables.getOrElse(goal.table, Seq.empty);
+      matchingRow <- provTable.search(goal.cols)
+    ) yield {
+      (provTable.rule, provRowToVariableBindings(provTable.rule, matchingRow))
+    }
+  }
+
+  lazy val messages: List[Message] = {
+    val msgs = for (
+      (tableName, provTables) <- provTables;
+      table <- provTables
+      if table.rule.isAsync;
+      clockPred = table.rule.bodyPredicates.filter(_.tableName == "clock")(0);
+      fromIdent = clockPred.cols(0).asInstanceOf[Identifier].name;
+      toIdent = clockPred.cols(1).asInstanceOf[Identifier].name;
+      row <- table.facts;
+      bindings = provRowToVariableBindings(table.rule, row);
+      from = bindings(fromIdent);
+      to = bindings(toIdent);
+      sendTime = bindings("NRESERVED").toInt;
+      receiveTime = bindings("MRESERVED").toInt;
+      if sendTime != failureSpec.eot
+    ) yield {
+      Message(tableName, from, to, sendTime, receiveTime)
+    }
+    msgs.toList
+  }
+}
+
+case class ProvenanceTable(rule: Rule, facts: List[List[String]]) {
+  import ProvenanceReader._
+
+  /**
+   * Search this provenance table for facts matching the given pattern
+   */
+  def search(pattern: List[String]): List[List[String]] = {
     // The provenance tables record _all_ variable bindings used in the rule firing, not just those
     // that appear in the rule head, so the provenance table's schema won't necessarily match the
     // original table.  Because of how we perform the rewriting, the two tables agree on the first
     // N-1 columns, then the provenance table may have extra columns.  For both tables, the last
     // column will always record the time.
     def matchesTarget(fact: List[String]): Boolean = {
-      matchesPattern(target)(fact.take(target.size - 1) ++ List(fact.last))
+      matchesPattern(pattern)(fact.take(pattern.size - 1) ++ List(fact.last))
     }
-    provFacts.filter(matchesTarget)
+    facts.filter(matchesTarget)
   }
 }

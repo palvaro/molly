@@ -55,6 +55,8 @@ case class Rule(head: Predicate, body: List[Either[Predicate, Expr]]) extends Cl
   // Match the Ruby solver's convention that a predicate's location column always appears
   // as the first column of its first body predicate
   val locationSpecifier = bodyPredicates(0).cols(0)
+
+  def isAsync: Boolean = head.time == Some(Async())
 }
 case class Predicate(tableName: String,
                      cols: List[Atom],
