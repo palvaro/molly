@@ -2,10 +2,26 @@ package edu.berkeley.cs.boom.molly.derivations
 
 import scala.collection.immutable.{Nil, Set, List}
 import edu.berkeley.cs.boom.molly.util.HashcodeCaching
-import edu.berkeley.cs.boom.molly.ast.Rule
+import edu.berkeley.cs.boom.molly.ast.{Identifier, Predicate, Rule}
 import scalaz._
 import Scalaz._
+import java.util.concurrent.atomic.AtomicInteger
 
+
+object DerivationTrees {
+  val nextRuleNodeId = new AtomicInteger(0)
+  val nextGoalNodeId = new AtomicInteger(0)
+
+  /**
+   * Constructs a dummy rule node that doesn't correspond to a program rule.
+   * Used by neg. provenance extraction.
+   */
+  def dummyRuleNode(name: String, subgoals: Set[GoalNode]): RuleNode = {
+    val dummyPred = new Predicate(name, List(Identifier("_")), false, None)
+    val dummyRule = new Rule(dummyPred, List(Left(dummyPred)))
+    RuleNode(dummyRule, subgoals)
+  }
+}
 
 case class GoalTuple(table: String, cols: List[String], negative: Boolean = false, tombstone: Boolean = false) {
   override def toString: String = (if (negative) "NOT!" else "") +  (if (tombstone) "TOMB" else "") + table + "(" + cols.mkString(", ") + ")"
@@ -16,7 +32,7 @@ case class GoalTuple(table: String, cols: List[String], negative: Boolean = fals
  * Represents a goal (fact to be proved).  Appears at the root of the rule-goal graph.
  */
 trait GoalNode {
-  val id: Int
+  val id: Int = DerivationTrees.nextGoalNodeId.getAndIncrement
   val tuple: GoalTuple
   lazy val importantClocks: Set[(String, String, Int)] = Set()
   /** If this goal node is an important clock, returns that clock */
@@ -26,7 +42,7 @@ trait GoalNode {
   def allTups: Set[GoalTuple] = Set()
 }
 
-case class RealGoalNode(id: Int, tuple: GoalTuple, pRules: Set[RuleNode], negative: Boolean = false) extends HashcodeCaching with GoalNode {
+case class RealGoalNode(tuple: GoalTuple, pRules: Set[RuleNode], negative: Boolean = false) extends HashcodeCaching with GoalNode {
   override lazy val rules = pRules
 
   override lazy val ownImportantClock = {
@@ -60,7 +76,7 @@ case class RealGoalNode(id: Int, tuple: GoalTuple, pRules: Set[RuleNode], negati
   }
 }
 
-case class PhonyGoalNode(id: Int, tuple: GoalTuple, history: Set[GoalNode]) extends GoalNode {
+case class PhonyGoalNode(tuple: GoalTuple, history: Set[GoalNode]) extends GoalNode {
 
   override lazy val ownImportantClock = {
     tuple match {
@@ -84,8 +100,9 @@ case class PhonyGoalNode(id: Int, tuple: GoalTuple, history: Set[GoalNode]) exte
 /**
  * Represents a concrete application of a rule.
  */
-case class RuleNode(id: Int, rule: Rule, subgoals: Set[GoalNode]) extends HashcodeCaching {
+case class RuleNode(rule: Rule, subgoals: Set[GoalNode]) extends HashcodeCaching {
   require (!subgoals.isEmpty, "RuleNode must have subgoals")
+  val id = DerivationTrees.nextRuleNodeId.getAndIncrement
   lazy val enumerateDistinctDerivationsOfSubGoals: List[RuleNode] = {
     val choices: List[List[GoalNode]] = subgoals.map(_.enumerateDistinctDerivations.toList).toList
     if (choices.exists(_.isEmpty)) {

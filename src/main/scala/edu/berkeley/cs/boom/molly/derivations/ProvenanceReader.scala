@@ -7,7 +7,6 @@ import edu.berkeley.cs.boom.molly.ast.Rule
 import edu.berkeley.cs.boom.molly.{FailureSpec, UltimateModel}
 import edu.berkeley.cs.boom.molly.ast.Identifier
 import edu.berkeley.cs.boom.molly.ast.Program
-import java.util.concurrent.atomic.AtomicInteger
 import scalaz._
 import nl.grons.metrics.scala.InstrumentedBuilder
 import com.codahale.metrics.MetricRegistry
@@ -38,8 +37,7 @@ class ProvenanceReader(program: Program,
                        model: UltimateModel, negativeSupport: Boolean)
                       (implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
   import ProvenanceReader._
-  private val nextRuleNodeId = new AtomicInteger(0)
-  private val nextGoalNodeId = new AtomicInteger(0)
+
 
   private val derivationBuilding = metrics.timer("derivation-tree-building")
 
@@ -64,127 +62,127 @@ class ProvenanceReader(program: Program,
 
   val messages: List[Message] = provTableManager.messages
 
+  /**
+   * Used by internal sanity tests to check for conflicting evidence over whether negative
+   * subgoals were derived.
+   */
+  private def assertNotDerived(goal: GoalTuple) {
+    val matchingTuples = model.tables(goal.table).filter(matchesPattern(goal.cols))
+    val ruleFirings = findRuleFirings(goal)
+    val internallyConsistent = matchingTuples.isEmpty == ruleFirings.isEmpty
+    assert(internallyConsistent, s"Tuple $goal found in table without derivation (or vice-versa)")
+    assert(matchingTuples.isEmpty, s"Found derivation ${matchingTuples(0)} of negative goal $goal")
+    assert(ruleFirings.isEmpty, s"Found rule firings $ruleFirings for negative goal $goal")
+  }
+
   private def buildPhonyDerivationTree(goalTuple: GoalTuple): PhonyGoalNode = {
     val msgs = getContributingMessages(goalTuple)
     logger.debug(s"$goalTuple phony msgs: $msgs")
-    PhonyGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, msgs.map(getPhonyDerivationTree))
+    PhonyGoalNode(goalTuple, msgs.map(getPhonyDerivationTree))
   }
 
   private def buildDerivationTree(goalTuple: GoalTuple): GoalNode = {
     logger.debug(s"Reading provenance for tuple $goalTuple")
     val tupleWasDerived = model.tables(goalTuple.table).exists(matchesPattern(goalTuple.cols))
-    // First, check whether the goal tuple is part of the EDB:
-    if (goalTuple.negative && tupleWasDerived) {
-      logger.debug(s"Prov. table for ${goalTuple.table} contains $goalTuple !!")
-      return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple.copy(tombstone = true), Set.empty)
-      // if it's a neg tuple, discharge it.
-    } else if (isInEDB(goalTuple)) {
-      logger.debug(s"Found $goalTuple in EDB")
-      return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
-    }
-    // Otherwise, a rule must have derived it:
-    val ruleFirings = findRuleFirings(goalTuple)
+    lazy val ruleFirings = findRuleFirings(goalTuple)
     if (goalTuple.negative) {
-      if (ruleFirings.isEmpty) return RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set.empty)
-      logger.debug(s"Negative goal $goalTuple has potential firings; falling through to explore them")
-    } else if (ruleFirings.isEmpty && tupleWasDerived) {
-      throw new IllegalStateException(s"Couldn't find rules to explain derivation of $goalTuple")
-    }
-    val ruleNodes = ruleFirings.map { case (provRule, bindings) =>
-      logger.debug(s"Exploring firing of ${provRule.head.tableName} with bindings $bindings")
-      val time = bindings("NRESERVED").toInt
-
-      // Substitute the variable bindings to determine the set of goals used by this rule.
-      def substituteBindings(pred: Predicate): GoalTuple = {
-        val goalCols = pred.cols.map {
-          case StringLiteral(s) => s
-          case IntLiteral(i) => i.toString
-          case Identifier(ident) => bindings.getOrElse(ident, WILDCARD)
-          case agg: Aggregate =>
-            throw new NotImplementedError("Don't know how to substitute for aggregate")
-          case expr: Expr =>
-            throw new NotImplementedError("Didn't expect expression to appear in predicate")
-        }
-        GoalTuple(pred.tableName, goalCols)
-      }
-
-      val (negativePreds, positivePreds) = provRule.bodyPredicates.partition(_.notin)
-      val negativeGoals = negativePreds.map(substituteBindings)
-      val pos = goalTuple.copy(negative = false)
-      val positiveGoals = {
-        val aggVars = provRule.head.variablesInAggregates
-        if (aggVars.isEmpty) {
-          positivePreds.map(substituteBindings).filter{g => g != pos}
-        } else {
-          // If the rule contains aggregates, add each tuple that contributed to the aggregate
-          // as a goal.
-          val (predsWithoutAggVars, predsWithAggVars) =
-            positivePreds.partition(_.variables.intersect(aggVars).isEmpty)
-          val aggGoals = aggVars.flatMap { aggVar =>
-            val aggPreds = predsWithAggVars.map(substituteBindings)
-            aggPreds.flatMap { pred =>
-              val tuples = model.tableAtTime(pred.table, time)
-              val matchingTuples = tuples.filter(matchesPattern(pred.cols))
-              matchingTuples.map(t => GoalTuple(pred.table, t))
-            }
-          }
-
-          predsWithoutAggVars.map(substituteBindings).filter{g => g != pos} ++ aggGoals
-        }
-      }
-
-      logger.debug(s"Positive subgoals: $positiveGoals")
-      logger.debug(s"Negative subgoals: $negativeGoals")
-
-      // As a sanity check, ensure that negative goals don't have any derivations:
-      for (goal <- negativeGoals) {
-        val matchingTuples = model.tables(goal.table).filter(matchesPattern(goal.cols))
-        val ruleFirings = findRuleFirings(goal)
-        val internallyConsistent = matchingTuples.isEmpty == ruleFirings.isEmpty
-        if (!goalTuple.negative) {
-          assert(internallyConsistent, s"Tuple $goal found in table without derivation (or vice-versa)")
-          assert(matchingTuples.isEmpty, s"Found derivation ${matchingTuples(0)} of negative goal $goal")
-          assert(ruleFirings.isEmpty, s"Found rule firings $ruleFirings for negative goal $goal")
-        }
-        logger.debug(s"negative goal: $goal}")
-      }
-
-      // Recursively compute the provenance of the new goals:
-      if (negativeSupport) {
-        if (goalTuple.negative) {
-          // We're considering a "rule firing" that describes a potential way in which a positive
+      if (tupleWasDerived) {
+        logger.debug(s"Prov. table for ${goalTuple.table} contains $goalTuple !!")
+        RealGoalNode(goalTuple.copy(tombstone = true), Set.empty)
+      } else if (!negativeSupport || ruleFirings.isEmpty) {
+        RealGoalNode(goalTuple, Set.empty)
+      } else {
+        logger.debug(s"Negative goal $goalTuple has potential support")
+        // Negative subgoals involve an interesting duality: NOT(A) is a goal that's derived through
+        // a single rule whose subgoals represent the non-derivation of A through individual rules.
+        // So, a particular rule may fail to derive A for any one of several reasons and every such
+        // potential rule firing must fail to occur.
+        val failureOfIndividualRules = ruleFirings.map {  case (provRule, bindings) =>
+          val (positiveGoals, negativeGoals) = ruleFiringToSubgoals(provRule, bindings)
+          // We're considering a "rule firing" that describes a potential way in which a _positive_
           // goalTuple could have been derived.  By applying DeMorgan's law to this firing, we
-          // produce one rule per subgoal describing how goalTuple couldn't have been derived
-          // through application of THIS rule.
+          // produce one rule per subgoal describing how goalTuple _wasn't_ derived
+          // through application of this rule.
           val subgoals = positiveGoals.map(_.copy(negative = true)) ++ negativeGoals.map(_.copy(negative = false))
-          // TODO: possibly a more meaningful choice of provRule here?
-          subgoals.map(sg => RuleNode(nextRuleNodeId.getAndIncrement, provRule, Set(getDerivationTree(sg)))).toSet
-        } else {
-          val subgoals = positiveGoals.map(_.copy(negative = false)) ++ negativeGoals.map(_.copy(negative = true))
-          Set(RuleNode(nextRuleNodeId.getAndIncrement, provRule, subgoals.map(getDerivationTree).toSet))
+          val causesOfNonFiring = subgoals.map(sg => DerivationTrees.dummyRuleNode(s"$sg", Set(getDerivationTree(sg)))).toSet
+          RealGoalNode(GoalTuple(s"Not derived by ${provRule.head.tableName}", Nil), causesOfNonFiring)
         }
-      } else { // If negative provenance is disabled, just ignore negative subgoals.
-        val subgoals = positiveGoals.map(_.copy(negative = false))
-        Set(RuleNode(nextRuleNodeId.getAndIncrement, provRule, subgoals.map(getDerivationTree).toSet))
+        val failureOfAllRules =
+          DerivationTrees.dummyRuleNode(s"Not derived by any rule", failureOfIndividualRules.toSet)
+        RealGoalNode(goalTuple, Set(failureOfAllRules))
+      }
+    } else { // goalTuple is positive
+      if (isInEDB(goalTuple)) {
+        logger.debug(s"Found $goalTuple in EDB")
+        RealGoalNode(goalTuple, Set.empty)
+      } else if (ruleFirings.isEmpty && tupleWasDerived) {
+        throw new IllegalStateException(s"Couldn't find rules to explain derivation of $goalTuple")
+      } else {
+        val ruleNodes = ruleFirings.map { case (provRule, bindings) =>
+          val (positiveGoals, negativeGoals) = ruleFiringToSubgoals(provRule, bindings)
+          negativeGoals.foreach(assertNotDerived) // Since we assume !goalTuple.negative here
+          // Recursively compute the provenance of the new goals:
+          if (negativeSupport) {
+            val subgoals = positiveGoals.map(_.copy(negative = false)) ++ negativeGoals.map(_.copy(negative = true))
+            Set(RuleNode(provRule, subgoals.map(getDerivationTree).toSet))
+          } else {
+            // If negative support is disabled, just ignore negative subgoals.
+            val subgoals = positiveGoals.map(_.copy(negative = false))
+            Set(RuleNode(provRule, subgoals.map(getDerivationTree).toSet))
+          }
+        }
+        RealGoalNode(goalTuple, ruleNodes.flatten.toSet)
       }
     }
-    if (negativeSupport && goalTuple.negative) {
-      // Negative subgoals involve an interesting duality: NOT(A) is a goal that's derived through
-      // a single rule whose subgoals represent the non-derivation of A through particular rules.
-      // So, a particular rule may fail to derive A for any one of several reasons and every such
-      // potential rule firing must fail to occur.
-      val nonFiringsOfSubgoals = ruleNodes.map { causesOfNonFiring =>
-        // TODO: cleanup of internal special goal tuples, or maybe make new goal node types
-        RealGoalNode(nextGoalNodeId.getAndIncrement, GoalTuple("AllfiringsFail", Nil), causesOfNonFiring)
-      }
-      val dummyRule = program.rules.head.copy(program.rules.head.head.copy("AllFiringsFail"))
-      // ^^^ TODO: _terrible_ hack; should put in a real rule or allow
-      // for rule nodes that don't correspond to program rules
-      val failureOfAllRules = RuleNode(nextRuleNodeId.getAndIncrement, dummyRule, nonFiringsOfSubgoals.toSet)
-      RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, Set(failureOfAllRules))
-    } else {
-      RealGoalNode(nextGoalNodeId.getAndIncrement, goalTuple, ruleNodes.flatten.toSet)
+  }
+
+  /**
+   * Given a rule firing, construct sets of positive and negative subgoals.
+   * @return (positiveGoals, negativeGoals)
+   */
+  private def ruleFiringToSubgoals(provRule: Rule, bindings: Map[String, String]): (Seq[GoalTuple], Seq[GoalTuple]) = {
+    logger.debug(s"Extracting subgoals from firing of ${provRule.head.tableName} with bindings $bindings")
+    val time = bindings("NRESERVED").toInt
+
+    val (negativePreds, positivePreds) = provRule.bodyPredicates.partition(_.notin)
+    val negativeGoals = negativePreds.map(predicateToGoal(bindings))
+    val positiveGoals = {
+      val aggVars = provRule.head.variablesInAggregates
+      val (predsWithoutAggVars, predsWithAggVars) =
+        positivePreds.partition(_.variables.intersect(aggVars).isEmpty)
+      val aggGoals =
+        predsWithAggVars.flatMap(predicateToGoal(bindings) _ andThen getAggregateSupport(time))
+      predsWithoutAggVars.map(predicateToGoal(bindings)) ++ aggGoals
     }
+    logger.debug(s"Positive subgoals: $positiveGoals")
+    logger.debug(s"Negative subgoals: $negativeGoals")
+    (positiveGoals, negativeGoals)
+  }
+
+  /**
+   * Determine the support for the value of an aggregate.
+   *
+   * @param time the time that the aggregate was calculated at
+   * @param pattern a goal / pattern that defines what fields are being aggregated.
+   * @return a GoalTuple for each tuple that contributed to the aggregate.
+   */
+  private def getAggregateSupport(time: Int)(pattern: GoalTuple): Seq[GoalTuple] = {
+    val tuples = model.tableAtTime(pattern.table, time)
+    val matchingTuples = tuples.filter(matchesPattern(pattern.cols))
+    matchingTuples.map(t => GoalTuple(pattern.table, t))
+  }
+
+  private def predicateToGoal(bindings: Map[String, String])(pred: Predicate): GoalTuple = {
+    val goalCols = pred.cols.map {
+      case StringLiteral(s) => s
+      case IntLiteral(i) => i.toString
+      case Identifier(ident) => bindings.getOrElse(ident, WILDCARD)
+      case agg: Aggregate =>
+        throw new NotImplementedError("Don't know how to substitute for aggregate")
+      case expr: Expr =>
+        throw new NotImplementedError("Didn't expect expression to appear in predicate")
+    }
+    GoalTuple(pred.tableName, goalCols)
   }
 
   private def getContributingMessages(tuple: GoalTuple): Set[GoalTuple] = {
