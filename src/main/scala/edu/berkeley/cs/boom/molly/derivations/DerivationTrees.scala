@@ -28,10 +28,12 @@ case class GoalTuple(table: String, cols: List[String], negative: Boolean = fals
 
 }
 
+trait DerivationTreeNode
+
 /**
  * Represents a goal (fact to be proved).  Appears at the root of the rule-goal graph.
  */
-trait GoalNode {
+trait GoalNode extends DerivationTreeNode {
   val id: Int = DerivationTrees.nextGoalNodeId.getAndIncrement
   val tuple: GoalTuple
   lazy val importantClocks: Set[(String, String, Int)] = Set()
@@ -100,7 +102,7 @@ case class PhonyGoalNode(tuple: GoalTuple, history: Set[GoalNode]) extends GoalN
 /**
  * Represents a concrete application of a rule.
  */
-case class RuleNode(rule: Rule, subgoals: Set[GoalNode]) extends HashcodeCaching {
+case class RuleNode(rule: Rule, subgoals: Set[GoalNode]) extends HashcodeCaching with DerivationTreeNode {
   require (!subgoals.isEmpty, "RuleNode must have subgoals")
   val id = DerivationTrees.nextRuleNodeId.getAndIncrement
   lazy val enumerateDistinctDerivationsOfSubGoals: List[RuleNode] = {
