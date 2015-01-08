@@ -7,6 +7,9 @@ import edu.berkeley.cs.boom.molly.ast.Rule
 import edu.berkeley.cs.boom.molly.{FailureSpec, UltimateModel}
 import edu.berkeley.cs.boom.molly.ast.Identifier
 import edu.berkeley.cs.boom.molly.ast.Program
+import edu.berkeley.cs.boom.molly.ast.Atom
+
+import edu.berkeley.cs.boom.molly.derivations._
 import scalaz._
 import nl.grons.metrics.scala.InstrumentedBuilder
 import com.codahale.metrics.MetricRegistry
@@ -82,34 +85,23 @@ class ProvenanceReader(program: Program,
   }
 
   private def buildDerivationTree(goalTuple: GoalTuple): GoalNode = {
-    logger.debug(s"Reading provenance for tuple $goalTuple")
     val tupleWasDerived = model.tables(goalTuple.table).exists(matchesPattern(goalTuple.cols))
     lazy val ruleFirings = findRuleFirings(goalTuple)
+    logger.debug(s"Reading provenance for tuple $goalTuple $tupleWasDerived")
     if (goalTuple.negative) {
-      if (tupleWasDerived) {
-        logger.debug(s"Prov. table for ${goalTuple.table} contains $goalTuple !!")
-        RealGoalNode(goalTuple.copy(tombstone = true), Set.empty)
-      } else if (!negativeSupport || ruleFirings.isEmpty) {
-        RealGoalNode(goalTuple, Set.empty)
+      // a conservative overapproximation of the facts whose existence make goalTuple false
+      val causes = provTableManager.possibleCauses(goalTuple)
+      /* we need a stub rule node, which requires at least one stub table,
+         to capture the conservative assumption that *any* existing records from which
+         goalTuple is negatively reachable could, if falsified, make goalTuple true */
+      val phonyPred = Predicate("phonyGoal", List(StringLiteral("someplace")), false, None)
+      val phonyRule = Rule(Predicate("phony",List(),false, None),List(Left(phonyPred)))
+      if (causes.isEmpty) {
+        logger.debug(s"no causes for $goalTuple")
+        RealGoalNode(goalTuple, Set())
       } else {
-        logger.debug(s"Negative goal $goalTuple has potential support")
-        // Negative subgoals involve an interesting duality: NOT(A) is a goal that's derived through
-        // a single rule whose subgoals represent the non-derivation of A through individual rules.
-        // So, a particular rule may fail to derive A for any one of several reasons and every such
-        // potential rule firing must fail to occur.
-        val failureOfIndividualRules = ruleFirings.map {  case (provRule, bindings) =>
-          val (positiveGoals, negativeGoals) = ruleFiringToSubgoals(provRule, bindings)
-          // We're considering a "rule firing" that describes a potential way in which a _positive_
-          // goalTuple could have been derived.  By applying DeMorgan's law to this firing, we
-          // produce one rule per subgoal describing how goalTuple _wasn't_ derived
-          // through application of this rule.
-          val subgoals = positiveGoals.map(_.copy(negative = true)) ++ negativeGoals.map(_.copy(negative = false))
-          val causesOfNonFiring = subgoals.map(sg => DerivationTrees.dummyRuleNode(s"$sg", Set(getDerivationTree(sg)))).toSet
-          RealGoalNode(GoalTuple(s"Not derived by ${provRule.head.tableName}", Nil), causesOfNonFiring)
-        }
-        val failureOfAllRules =
-          DerivationTrees.dummyRuleNode(s"Not derived by any rule", failureOfIndividualRules.toSet)
-        RealGoalNode(goalTuple, Set(failureOfAllRules))
+        logger.debug(s"possible causes of $goalTuple: $causes")
+        RealGoalNode(goalTuple, Set(RuleNode(phonyRule, causes.map(getDerivationTree).toSet)))
       }
     } else { // goalTuple is positive
       if (isInEDB(goalTuple)) {
@@ -122,14 +114,12 @@ class ProvenanceReader(program: Program,
           val (positiveGoals, negativeGoals) = ruleFiringToSubgoals(provRule, bindings)
           negativeGoals.foreach(assertNotDerived) // Since we assume !goalTuple.negative here
           // Recursively compute the provenance of the new goals:
-          if (negativeSupport) {
-            val subgoals = positiveGoals.map(_.copy(negative = false)) ++ negativeGoals.map(_.copy(negative = true))
-            Set(RuleNode(provRule, subgoals.map(getDerivationTree).toSet))
+          val subgoals = if (negativeSupport) {
+            positiveGoals.map(_.copy(negative = false)) ++ negativeGoals.map(_.copy(negative = true))
           } else {
-            // If negative support is disabled, just ignore negative subgoals.
-            val subgoals = positiveGoals.map(_.copy(negative = false))
-            Set(RuleNode(provRule, subgoals.map(getDerivationTree).toSet))
+            positiveGoals.map(_.copy(negative = false))
           }
+          Set(RuleNode(provRule, subgoals.map(getDerivationTree).toSet))
         }
         RealGoalNode(goalTuple, ruleNodes.flatten.toSet)
       }
@@ -234,6 +224,7 @@ class ProvenanceReader(program: Program,
 
 }
 
+case class DependsInfo(from: Predicate, to: Predicate, nonmonotonic: Boolean, temporality: Option[Time])
 
 class ProvenanceTableManager(program: Program, model: UltimateModel, failureSpec: FailureSpec)
   extends Logging {
@@ -249,7 +240,40 @@ class ProvenanceTableManager(program: Program, model: UltimateModel, failureSpec
     ProvenanceTable(rule, provTableEntries)
   }.groupBy(t => tableNamePattern.findFirstMatchIn(t.rule.head.tableName).get.group(1))
 
+  val depends = program.rules.filter(r => r.head.tableName.indexOf("_prov") == -1).flatMap { r =>
+    r.body.filter(b => b.isLeft && b.left.get.tableName != "clock" && b.left.get.tableName != r.head.tableName).map { s =>
+      val nm = s.isRight || (s.isLeft && s.left.get.notin)
+      DependsInfo(s.left.get, r.head, nm, r.head.time)
+    }
+  }.toSet
+  val reach = reachability(depends, Set()).filter(r => r.nonmonotonic)
+  val pretty = reach.map(r => r.from.tableName + " -> " + r.to.tableName)
+  logger.warn(s"REACHES is $pretty")
   logger.debug(s"Provenance tables are: ${provTables.mapValues(_.map(x => x.rule.head.tableName))}")
+
+  private def reachability(deps: Set[DependsInfo], deltas: Set[DependsInfo]): Set[DependsInfo] = {
+    val newRecs = for (
+      delt <- deltas;
+      dep <- deps.filter(d => d.from == delt.to)
+    ) yield {
+      val nm = ((dep.nonmonotonic && !delt.nonmonotonic) || (!dep.nonmonotonic && delt.nonmonotonic))
+      DependsInfo(dep.from, delt.to, nm, dep.temporality)
+    }
+    if (newRecs.isEmpty) {
+      deps ++ deltas ++ newRecs
+    } else {
+      reachability(deps ++ deltas, newRecs)
+    }
+  }
+
+  def possibleCauses(goal: GoalTuple): Set[GoalTuple] = {
+    val predecessorTables = reach.filter(r => goal.table == r.to.tableName).map(r => r.from.tableName)
+    for (
+      p <- predecessorTables;
+      r <- model.tables(p)
+      if (r.last.toInt <= goal.cols.last.toInt)
+    ) yield {GoalTuple(p, r, false, true)}
+  }
 
   private def provRowToVariableBindings(provRule: Rule, provTableRow: List[String]):  Map[String, String] = {
     // Given a row from the provenance table, we need to reconstruct the variable bindings.
