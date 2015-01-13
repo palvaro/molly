@@ -34,11 +34,13 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
     new C4Wrapper("error_free", failureFreeProgram).run
   }
 
-  private val failureFreeGood = failureFreeUltimateModel.tableAtTime("good", failureSpec.eot).toSet
-  if (failureFreeGood.isEmpty) {
-    throw new IllegalStateException("'good' was empty in the failure-free run")
+  private val failureFreeGood = failureFreeUltimateModel.tableAtTime("post", failureSpec.eot).toSet
+  private val failureFreePre = failureFreeUltimateModel.tableAtTime("post", failureSpec.eot).toSet
+
+  if (failureFreeGood.isEmpty && !failureFreePre.isEmpty) {
+    throw new IllegalStateException("'post' was empty in the failure-free run")
   } else {
-    logger.debug(s"Failure-free 'good' is\n$failureFreeGood")
+    logger.debug(s"Failure-free 'post' is\n$failureFreeGood")
   }
 
   private val alreadyExplored: mutable.Set[FailureSpec] = if (useSymmetry) {
@@ -59,7 +61,7 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
 
   private def whichProvenance(reader: ProvenanceReader, orig: List[GoalNode]): List[GoalNode] = {
     if (causalOnly) {
-      reader.getPhonyDerivationTreesForTable("good")
+      reader.getPhonyDerivationTreesForTable("post")
     } else {
       orig
     }
@@ -106,11 +108,16 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
       
 
   def verify: EphemeralStream[Run] = {
+    logger.warn(s"DO verify")
     val provenanceReader =
       new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel, negativeSupport)
+    logger.warn("get messages")
     val messages = provenanceReader.messages
-    val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
+    logger.warn("GET TREES")
+    val provenance_orig = provenanceReader.getDerivationTreesForTable("post")
     val provenance = whichProvenance(provenanceReader, provenance_orig)
+    logger.warn("done TREES")
+
     provenance.foreach{ p =>
       val tups = p.allTups
       logger.debug("THIS prov, " + tups.toString)
@@ -136,7 +143,18 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
   }
 
   private def isGood(model: UltimateModel): Boolean = {
-    model.tableAtTime("good", failureSpec.eot).toSet == failureFreeGood
+    // this, OR pre is empty in the current model for each post in failureFreeGood
+    val pres = model.tableAtTime("pre", failureSpec.eot).toSet
+    val posts = model.tableAtTime("post", failureSpec.eot).toSet
+
+    logger.debug(s"FFG: $failureFreeGood.  PRE: $pres. ")
+
+    val diff = failureFreeGood -- model.tableAtTime("post", failureSpec.eot)
+
+    (model.tableAtTime("post", failureSpec.eot).toSet == failureFreeGood ||
+      //failureFreeGood.toList.forall(g => !pres.contains(g))
+      diff.toList.forall(g => !pres.contains(g))
+    )
   }
 
   /**
@@ -147,10 +165,10 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
     logger.info(s"Retesting with crashes ${failureSpec.crashes} and losses ${failureSpec.omissions}")
     val failProgram = DedalusTyper.inferTypes(failureSpec.addClockFacts(program))
     val model = new C4Wrapper("with_errors", failProgram).run
-    logger.info(s"'good' is ${model.tableAtTime("good", failureSpec.eot)}")
+    logger.info(s"'post' is ${model.tableAtTime("post", failureSpec.eot)}")
     val provenanceReader = new ProvenanceReader(failProgram, failureSpec, model, negativeSupport)
     val messages = provenanceReader.messages
-    val provenance_orig = provenanceReader.getDerivationTreesForTable("good")
+    val provenance_orig = provenanceReader.getDerivationTreesForTable("post")
     val provenance = whichProvenance(provenanceReader, provenance_orig)
     provenance.foreach{ p =>
       val tups = p.allTups

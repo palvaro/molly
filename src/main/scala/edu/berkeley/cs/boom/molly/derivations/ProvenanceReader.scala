@@ -100,7 +100,7 @@ class ProvenanceReader(program: Program,
         logger.debug(s"no causes for $goalTuple")
         RealGoalNode(goalTuple, Set())
       } else {
-        logger.debug(s"possible causes of $goalTuple: $causes")
+        logger.warn(s"possible causes of $goalTuple: $causes")
         RealGoalNode(goalTuple, Set(RuleNode(phonyRule, causes.map(getDerivationTree).toSet)))
       }
     } else { // goalTuple is positive
@@ -241,14 +241,29 @@ class ProvenanceTableManager(program: Program, model: UltimateModel, failureSpec
   }.groupBy(t => tableNamePattern.findFirstMatchIn(t.rule.head.tableName).get.group(1))
 
   val depends = program.rules.filter(r => r.head.tableName.indexOf("_prov") == -1).flatMap { r =>
-    r.body.filter(b => b.isLeft && b.left.get.tableName != "clock" && b.left.get.tableName != r.head.tableName).map { s =>
+    r.body.filter(b => b.isLeft && b.left.get.tableName != "clock").map { s =>
       val nm = s.isRight || (s.isLeft && s.left.get.notin)
       DependsInfo(s.left.get, r.head, nm, r.head.time)
     }
   }.toSet
-  val reach = reachability(depends, Set()).filter(r => r.nonmonotonic)
-  val pretty = reach.map(r => r.from.tableName + " -> " + r.to.tableName)
-  logger.warn(s"REACHES is $pretty")
+  val prett = depends.map(d => d.from.tableName + "-->" + d.to.tableName + "(" + d.temporality + ")")
+  logger.debug(s"compute reach for $prett")
+  // FIXME
+  val reach1 = reachability(depends, depends)//.filter(r => r.nonmonotonic)
+  // there must be an idiomatic way to do this, eg using flatmap
+   val reach = reach1.filter{d =>
+    d.temporality match {
+      case Some(_) => true
+      case None => !reach1.exists{inner =>
+        (d.from == inner.from && d.to == inner.to) && (d.temporality match {
+          case Some(_) => true
+          case None => false
+        })
+      }
+    }
+  }
+  val pretty = reach.map(r => r.from.tableName + " -> " + r.to.tableName + "(" + r.temporality + ")")
+  logger.debug(s"REACHES is $pretty")
   logger.debug(s"Provenance tables are: ${provTables.mapValues(_.map(x => x.rule.head.tableName))}")
 
   private def reachability(deps: Set[DependsInfo], deltas: Set[DependsInfo]): Set[DependsInfo] = {
@@ -257,22 +272,29 @@ class ProvenanceTableManager(program: Program, model: UltimateModel, failureSpec
       dep <- deps.filter(d => d.from == delt.to)
     ) yield {
       val nm = ((dep.nonmonotonic && !delt.nonmonotonic) || (!dep.nonmonotonic && delt.nonmonotonic))
-      DependsInfo(dep.from, delt.to, nm, dep.temporality)
+      // again, there must be an idiomatic way to do this...
+      val tmp = dep.temporality match {
+        case None => delt.temporality
+        case x => x
+      }
+      DependsInfo(dep.from, delt.to, nm, tmp)
     }
+    logger.debug(s"SEMI-n.  DEP: ${deps.size} DELTAS: ${deltas.size} NEW: ${newRecs.size}")
     if (newRecs.isEmpty) {
       deps ++ deltas ++ newRecs
     } else {
-      reachability(deps ++ deltas, newRecs)
+      reachability(deps ++ deltas, newRecs -- deltas)
     }
   }
 
   def possibleCauses(goal: GoalTuple): Set[GoalTuple] = {
-    val predecessorTables = reach.filter(r => goal.table == r.to.tableName).map(r => r.from.tableName)
+
+    val predecessorTables = reach.filter(r => goal.table == r.to.tableName).map(r => (r.from.tableName, r.temporality))
     for (
       p <- predecessorTables;
-      r <- model.tables(p)
-      if (r.last.toInt <= goal.cols.last.toInt)
-    ) yield {GoalTuple(p, r, false, true)}
+      r <- model.tables(p._1)
+      if (r.last.toInt < goal.cols.last.toInt || (r.last.toInt == goal.cols.last.toInt && p._2 == None))
+    ) yield {GoalTuple(p._1, r, false, false)}
   }
 
   private def provRowToVariableBindings(provRule: Rule, provTableRow: List[String]):  Map[String, String] = {
