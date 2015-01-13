@@ -44,9 +44,10 @@ object MollyBuild extends Build {
         "nl.grons" %% "metrics-scala" % "3.2.0_a2.2",
         "com.codahale.metrics" % "metrics-json" % "3.0.2",
         "org.codehaus.jackson" % "jackson-mapper-asl" % "1.9.13",
-        "com.github.tototoshi" %% "scala-csv" % "1.0.0",
-        "z3" % "z3" % " 2.1.1" from "https://github.com/epfl-lara/ScalaZ3/releases/download/v2.1.1/scalaz3-osx-64b-2.1.1.jar"
+        "com.github.tototoshi" %% "scala-csv" % "1.0.0"
       )
     )
-  )
+  ).dependsOn(scalaZ3)
+
+  lazy val scalaZ3 = RootProject(uri("git://github.com/JoshRosen/ScalaZ3.git#c0f0031139178c8b955fd1348c2bcb7bde90b475"))
 }
