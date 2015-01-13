@@ -26,7 +26,7 @@ case class Config(
   generateProvenanceDiagrams: Boolean = false,
   disableDotRendering: Boolean = false,
   findAllCounterexamples: Boolean = false,
-  negativeSupport: Boolean = false,
+  negativeSupport: Boolean = true,
   maxRuns: Int = Int.MaxValue
 )
 
