@@ -82,9 +82,9 @@ object TableOfCounterexamples {
         val meanRandomExe = randomResults.map(_._2).sum / (1.0 * NUM_RANDOM_RUNS)
         val (backwardTime, backwardExe) = runUntilFirstCounterexample(backwardConfig)
         val (symmetryTime, symmetryExe) = runUntilFirstCounterexample(symmetryConfig)
-        val (causalTime, causalExe) = runUntilFirstCounterexample(causalConfig)
+        //val (causalTime, causalExe) = runUntilFirstCounterexample(causalConfig)
         csvWriter.writeRow(Seq(inputPrograms, eot, eff, crashes, grossEstimate, meanRandomExe,
-          meanRandomTime, randomResults, backwardExe, backwardTime, symmetryExe, symmetryTime, causalExe, causalTime))
+          meanRandomTime, randomResults, backwardExe, backwardTime, symmetryExe, symmetryTime, 0, 0.0))
       }
     } finally {
       csvWriter.close()
