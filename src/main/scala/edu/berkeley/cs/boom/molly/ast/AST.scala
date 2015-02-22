@@ -8,16 +8,20 @@ sealed trait Expression extends Atom
 sealed trait Constant extends Expression
 
 case class Expr(left: Constant, op: String, right: Expression) extends Expression {
+  /**
+   * Returns the complete set of variable identifiers that appear anywhere in this expression.
+   */
   def variables: Set[Identifier] = {
-    val rightVariables = right match {
+    val rightVariables: Set[Identifier] = right match {
       case i: Identifier => Set(i)
       case e: Expr => e.variables
       case _ => Set.empty
     }
-    left match {
-      case i: Identifier => Set(i) ++ rightVariables
+    val leftVariables: Set[Identifier] = left match {
+      case i: Identifier => Set(i)
       case _ => Set.empty
     }
+    leftVariables ++ rightVariables
   }
 }
 
