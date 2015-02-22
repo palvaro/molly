@@ -1,13 +1,12 @@
 package edu.berkeley.cs.boom.molly
 
-import scala.Some
 import edu.berkeley.cs.boom.molly.ast._
 
 object DedalusRewrites {
 
-  private val dc = Identifier("_")
-  private val nreserved = Identifier("NRESERVED")
-  private val mreserved = Identifier("MRESERVED")
+  val dc = Identifier("_")
+  val nreserved = Identifier("NRESERVED")
+  val mreserved = Identifier("MRESERVED")
 
   /**
    * Modify a program's rules and facts to reference a clock relation.
