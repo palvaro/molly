@@ -137,9 +137,9 @@ class ProvenanceReader(program: Program,
     val (negativePreds, positivePreds) = provRule.bodyPredicates.partition(_.notin)
     val negativeGoals = negativePreds.map(predicateToGoal(bindings))
     val positiveGoals = {
-      val aggVars = provRule.head.variablesInAggregates
+      val aggVars = provRule.head.aggregateVariables
       val (predsWithoutAggVars, predsWithAggVars) =
-        positivePreds.partition(_.variables.intersect(aggVars).isEmpty)
+        positivePreds.partition(_.topLevelVariables.intersect(aggVars).isEmpty)
       val aggGoals =
         predsWithAggVars.flatMap(predicateToGoal(bindings) _ andThen getAggregateSupport(time))
       predsWithoutAggVars.map(predicateToGoal(bindings)) ++ aggGoals

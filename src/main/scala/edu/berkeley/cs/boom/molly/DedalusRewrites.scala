@@ -70,18 +70,18 @@ object DedalusRewrites {
    *    agg(X, count<Y>) :- agg_vars(X, Y, _)
    */
   def splitAggregateRules(program: Program): Program = {
-    val (rules, aggRules) = program.rules.partition(_.head.variablesInAggregates.isEmpty)
+    val (rules, aggRules) = program.rules.partition(_.head.aggregateVariables.isEmpty)
     program.copy(rules = rules ++ aggRules.flatMap(splitAggregateRule))
   }
 
   private def splitAggregateRule(rule: Rule): Seq[Rule] = {
-    assert (!rule.head.variablesInAggregates.isEmpty, "Expected rule with aggregation")
+    assert (!rule.head.aggregateVariables.isEmpty, "Expected rule with aggregation")
     val ruleSansAgg =
       rule.copy(head = rule.head.copy(cols = rule.head.cols.filterNot(_.isInstanceOf[Aggregate])))
     val varsRule = recordAllVariableBindings(ruleSansAgg, ruleSansAgg.head.tableName + "_vars")
     val aggRuleBody = varsRule.head.cols.collect {
       case i @ Identifier(x) =>
-        if (rule.head.variables.contains(x) || rule.head.variablesInAggregates.contains(x)) i
+        if (rule.head.topLevelVariables.contains(x) || rule.head.aggregateVariables.contains(x)) i
         else dc
     }
     val aggRule = rule.copy(body = List(Left(varsRule.head.copy(time = None, cols = aggRuleBody))))
@@ -93,7 +93,7 @@ object DedalusRewrites {
    */
   private def recordAllVariableBindings(rule: Rule, newTableName: String): Rule = {
     val newVariables =
-      (rule.head.variablesInExpressions ++ rule.variables) -- rule.head.variables
+      (rule.head.expressionVariables ++ rule.variables) -- rule.head.topLevelVariables
     // Produce a new head, preserving the last time column:
     val newHead = rule.head.copy(tableName = newTableName,
       cols = rule.head.cols.take(rule.head.cols.size - 1) ++
@@ -106,7 +106,7 @@ object DedalusRewrites {
    */
   private def recordBoundVariables(rule: Rule, newTableName: String): Rule = {
     val newVariables =
-      (rule.head.variablesInExpressions ++ rule.boundVariables) -- rule.head.variables
+      (rule.head.expressionVariables ++ rule.boundVariables) -- rule.head.topLevelVariables
     // Produce a new head, preserving the last time column:
     val newHead = rule.head.copy(tableName = newTableName,
       cols = rule.head.cols.take(rule.head.cols.size - 1) ++
