@@ -2,6 +2,7 @@ package edu.berkeley.cs.boom.molly.ast
 
 import org.kiama.util.TreeNode
 
+import edu.berkeley.cs.boom.molly.DedalusType
 
 /**
  * An atom is an element that can appear in a predicate, such as a variable or aggregate.
@@ -41,7 +42,7 @@ case class Program(
   tables: Set[Table] = Set()
 ) extends TreeNode
 
-case class Table(name: String, types: List[String])
+case class Table(name: String, types: List[DedalusType])
 
 sealed trait Clause extends TreeNode
 case class Include(file: String) extends Clause

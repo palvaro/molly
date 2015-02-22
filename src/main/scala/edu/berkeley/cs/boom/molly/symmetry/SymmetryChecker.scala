@@ -2,7 +2,7 @@ package edu.berkeley.cs.boom.molly.symmetry
 
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.cs.boom.molly.ast.{Predicate, Program, StringLiteral}
-import edu.berkeley.cs.boom.molly.{DedalusTyper, FailureSpec}
+import edu.berkeley.cs.boom.molly.{DedalusType, DedalusTyper, FailureSpec}
 
 /**
  * Decides whether two failure scenarios are equivalent.
@@ -19,7 +19,7 @@ import edu.berkeley.cs.boom.molly.{DedalusTyper, FailureSpec}
 class SymmetryChecker(program: Program, nodes: List[String]) extends Logging {
 
   type EDB = Set[Predicate]
-  type TableTypes = Map[String, List[String]]
+  type TableTypes = Map[String, List[DedalusType]]
 
   private val typesForTable: TableTypes = {
     val fs = FailureSpec(1, 0, 0, nodes)  // TODO: shouldn't have to add dummy clocks to typecheck
@@ -32,7 +32,7 @@ class SymmetryChecker(program: Program, nodes: List[String]) extends Logging {
     predicates.collect { case pred@Predicate(table, cols, _, _) =>
       val colTypes = typesForTable(table)
       pred.cols.zip(colTypes).collect {
-        case (StringLiteral(l), DedalusTyper.LOCATION) => {
+        case (StringLiteral(l), DedalusType.LOCATION) => {
           logger.debug(s"Location literal '$l' appears in rule defining '$table'")
           l
         }
@@ -85,7 +85,7 @@ class SymmetryChecker(program: Program, nodes: List[String]) extends Logging {
     edb.map { case fact @ Predicate(table, cols, _, _) =>
       val colTypes = typesForTable(table)
       val newCols = cols.zip(colTypes).map {
-        case (StringLiteral(loc), DedalusTyper.LOCATION) if f.isDefinedAt(loc) => StringLiteral(f(loc))
+        case (StringLiteral(loc), DedalusType.LOCATION) if f.isDefinedAt(loc) => StringLiteral(f(loc))
         case (c, _) => c
       }
       fact.copy(cols = newCols)

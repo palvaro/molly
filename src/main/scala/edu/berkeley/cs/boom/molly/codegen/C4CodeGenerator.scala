@@ -5,7 +5,7 @@ import edu.berkeley.cs.boom.molly.ast._
 import edu.berkeley.cs.boom.molly.ast.StringLiteral
 import edu.berkeley.cs.boom.molly.ast.IntLiteral
 import edu.berkeley.cs.boom.molly.ast.Program
-import edu.berkeley.cs.boom.molly.DedalusTyper
+import edu.berkeley.cs.boom.molly.{DedalusType, DedalusTyper}
 
 object C4CodeGenerator extends PrettyPrinter {
   def generate(program: Program): String = {
@@ -18,10 +18,13 @@ object C4CodeGenerator extends PrettyPrinter {
     super.pretty(wholeProgram)
   }
 
-  private def typeToC4Type(t: DedalusTyper.Type): String = {
+  private def typeToC4Type(t: DedalusType): String = {
     t match {
-      case DedalusTyper.LOCATION => DedalusTyper.STRING
-      case _ => t
+      case DedalusType.LOCATION => "string"
+      case DedalusType.INT => "int"
+      case DedalusType.STRING => "string"
+      case DedalusType.UNKNOWN =>
+        throw new IllegalArgumentException("Cannot convert unknown Dedalus type to C4 type")
     }
   }
 

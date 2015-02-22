@@ -9,16 +9,27 @@ import org.jgrapht.alg.util.UnionFind
 import scala.collection.JavaConverters._
 import org.kiama.util.Positions
 
+sealed trait DedalusType
+object DedalusType {
+  case object INT extends DedalusType
+  case object STRING extends DedalusType
+  case object LOCATION extends DedalusType
+  case object UNKNOWN extends DedalusType
+}
+import DedalusType._
+
+/**
+ * Type inference algorithm for Dedalus programs.  The basic idea is that we walk the program AST
+ * and trace through all uses of variables in order to determine a set of constraints on variables'
+ * types and gather evidence in favor of them having certain types.  For example, if we see that
+ * two variables are unified in a rule, then those variables must have the same time.  Similarly, if
+ * we see a variable unified with an integer constant, then that variable must be of type integer.
+ */
 object DedalusTyper {
 
-  type Type = String
   private type ColRef = (String, Int)  // (tableName, columnNumber) pairs
-  val INT: Type = "int"
-  val STRING: Type = "string"
-  val LOCATION: Type = "location"
-  val UNKNOWN: Type = "unknown"
 
-  private def inferTypeOfAtom(atom: Atom): Type = {
+  private def inferTypeOfAtom(atom: Atom): DedalusType = {
     atom match {
       case StringLiteral(_) => STRING
       case IntLiteral(_) => INT
@@ -28,7 +39,7 @@ object DedalusTyper {
     }
   }
 
-  private def dom(types: Set[(Atom, Type)]): Set[(Atom, Type)] = {
+  private def dom(types: Set[(Atom, DedalusType)]): Set[(Atom, DedalusType)] = {
     if (types.map(_._2) == Set(STRING, LOCATION)) {
       types.filter(_._2 == LOCATION)
     } else {
@@ -91,7 +102,7 @@ object DedalusTyper {
 
     // Accumulate all type evidence.  To provide useful error messages when we find conflicting
     // evidence, we store the provenance of this evidence (the Atom
-    val typeEvidence: Map[ColRef, Set[(Atom, Type)]] = {
+    val typeEvidence: Map[ColRef, Set[(Atom, DedalusType)]] = {
       // Some meta-EDB tables might be empty in certain runs (such as crash()), so we need to
       // hard-code their type evidence:
       val metaEDBTypes = Seq(
