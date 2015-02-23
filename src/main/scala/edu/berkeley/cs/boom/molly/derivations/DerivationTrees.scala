@@ -1,12 +1,14 @@
 package edu.berkeley.cs.boom.molly.derivations
 
-import scala.collection.immutable.{Nil, Set, List}
-import edu.berkeley.cs.boom.molly.util.HashcodeCaching
-import edu.berkeley.cs.boom.molly.ast.{Identifier, Predicate, Rule}
-import scalaz._
-import Scalaz._
 import java.util.concurrent.atomic.AtomicInteger
 
+import scala.collection.immutable.{Nil, Set, List}
+
+import scalaz._
+import Scalaz._
+
+import edu.berkeley.cs.boom.molly.ast.{Identifier, Predicate, Rule}
+import edu.berkeley.cs.boom.molly.util.HashcodeCaching
 
 object DerivationTrees {
   val nextRuleNodeId = new AtomicInteger(0)
@@ -23,9 +25,18 @@ object DerivationTrees {
   }
 }
 
-case class GoalTuple(table: String, cols: List[String], negative: Boolean = false, tombstone: Boolean = false) {
-  override def toString: String = (if (negative) "NOT!" else "") +  (if (tombstone) "TOMB" else "") + table + "(" + cols.mkString(", ") + ")"
+case class GoalTuple(
+  table: String,
+  cols: List[String],
+  negative: Boolean = false,
+  tombstone: Boolean = false) {
 
+  override def toString: String = {
+    (if (negative) "NOT!" else "") +
+    (if (tombstone) "TOMB" else "") +
+    table +
+    "(" + cols.mkString(", ") + ")"
+  }
 }
 
 trait DerivationTreeNode
@@ -34,17 +45,53 @@ trait DerivationTreeNode
  * Represents a goal (fact to be proved).  Appears at the root of the rule-goal graph.
  */
 trait GoalNode extends DerivationTreeNode {
+  /**
+   * A unique identifier for this goal node.
+   */
   val id: Int = DerivationTrees.nextGoalNodeId.getAndIncrement
+
+  /**
+   * The tuple that this goal represents.
+   */
   val tuple: GoalTuple
+
+  /**
+   * The set of messages which, if omitted, _might_ invalidate this goal.
+   */
   lazy val importantClocks: Set[(String, String, Int)] = Set()
-  /** If this goal node is an important clock, returns that clock */
+
+  /**
+   * If this goal node is an important clock, returns that clock
+   */
   lazy val ownImportantClock: Option[(String, String, Int)] = None
+
+  /**
+   * For the derivation tree rooted at this node, yield a set of trees where each tree
+   * corresponds to a distinct derivation of this goal. For example, if this goal is
+   * provable with two rules, then split this tree into two trees, one which considers
+   * derivations using the first goal and one which considers the other goal, then
+   * continue this process recursively.
+   */
   lazy val enumerateDistinctDerivations: Set[(GoalNode)] = Set()
+
+  /**
+   * The set of rule firings that derive this goal.
+   */
   lazy val rules: Set[RuleNode] = Set()
+
+  /**
+   * Return all tuples appearing anywhere in the tree rooted at this GoalTuple, including
+   * the root of the tree itself.
+   */
   def allTups: Set[GoalTuple] = Set()
 }
 
-case class RealGoalNode(tuple: GoalTuple, pRules: Set[RuleNode], negative: Boolean = false) extends HashcodeCaching with GoalNode {
+case class RealGoalNode(
+  tuple: GoalTuple,
+  pRules: Set[RuleNode],
+  negative: Boolean = false
+) extends HashcodeCaching with GoalNode {
+
   override lazy val rules = pRules
 
   override lazy val ownImportantClock = {
@@ -78,7 +125,10 @@ case class RealGoalNode(tuple: GoalTuple, pRules: Set[RuleNode], negative: Boole
   }
 }
 
-case class PhonyGoalNode(tuple: GoalTuple, history: Set[GoalNode]) extends GoalNode {
+case class PhonyGoalNode(
+  tuple: GoalTuple,
+  history: Set[GoalNode]
+) extends GoalNode {
 
   override lazy val ownImportantClock = {
     tuple match {
@@ -102,7 +152,11 @@ case class PhonyGoalNode(tuple: GoalTuple, history: Set[GoalNode]) extends GoalN
 /**
  * Represents a concrete application of a rule.
  */
-case class RuleNode(rule: Rule, subgoals: Set[GoalNode]) extends HashcodeCaching with DerivationTreeNode {
+case class RuleNode(
+  rule: Rule,
+  subgoals: Set[GoalNode]
+) extends HashcodeCaching with DerivationTreeNode {
+
   require (!subgoals.isEmpty, "RuleNode must have subgoals")
   val id = DerivationTrees.nextRuleNodeId.getAndIncrement
   lazy val enumerateDistinctDerivationsOfSubGoals: List[RuleNode] = {
@@ -116,4 +170,9 @@ case class RuleNode(rule: Rule, subgoals: Set[GoalNode]) extends HashcodeCaching
   }
 }
 
-case class Message(table: String, from: String, to: String, sendTime: Int, receiveTime: Int)
+case class Message(
+  table: String,
+  from: String,
+  to: String,
+  sendTime: Int,
+  receiveTime: Int)

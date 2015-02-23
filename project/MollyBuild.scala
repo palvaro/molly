@@ -30,6 +30,7 @@ object MollyBuild extends Build {
         "com.typesafe" %% "scalalogging-slf4j" % "1.0.1",
         "org.slf4j" % "slf4j-log4j12" % "1.7.5",
         "org.scalatest" % "scalatest_2.10" % "2.2.4",
+        "org.mockito" % "mockito-core" % "1.10.19" % "test",
         "com.googlecode.kiama" % "kiama_2.10" % "1.6.0",
         "com.github.scopt" %% "scopt" % "3.2.0",
         "org.apache.commons" % "commons-math3" % "3.2",
