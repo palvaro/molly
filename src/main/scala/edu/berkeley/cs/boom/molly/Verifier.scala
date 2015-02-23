@@ -1,25 +1,62 @@
 package edu.berkeley.cs.boom.molly
 
-import edu.berkeley.cs.boom.molly.wrappers.C4Wrapper
-import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.cs.boom.molly.derivations._
+import scala.collection.mutable
+
 import java.util.concurrent.atomic.AtomicInteger
+
 import com.codahale.metrics.MetricRegistry
+import com.typesafe.scalalogging.slf4j.Logging
 import nl.grons.metrics.scala.InstrumentedBuilder
 import scalaz._
-import scala.collection.mutable
-import edu.berkeley.cs.boom.molly.derivations.{MessageLoss, CrashFailure, SolverVariable}
-import edu.berkeley.cs.boom.molly.symmetry.{SymmetryChecker, SymmetryAwareSet}
-import edu.berkeley.cs.boom.molly.derivations.Message
+
 import edu.berkeley.cs.boom.molly.ast.Program
+import edu.berkeley.cs.boom.molly.derivations._
+import edu.berkeley.cs.boom.molly.symmetry.{SymmetryChecker, SymmetryAwareSet}
+import edu.berkeley.cs.boom.molly.wrappers.C4Wrapper
 
 case class RunStatus(underlying: String) extends AnyVal
-case class Run(iteration: Int, status: RunStatus, failureSpec: FailureSpec, model: UltimateModel,
-               messages: List[Message], provenance: List[GoalNode])
 
-class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3Solver,
-               causalOnly: Boolean  = false, useSymmetry: Boolean = false, negativeSupport: Boolean = false)
-              (implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
+/**
+ * A report on the result of testing a single failure scenario.
+ *
+ * @param iteration monotonically increasing identifier for runs, assigned by the verifier
+ * @param status the outcome of the run (whether the program executed correctly or whether its
+ *               correctness assertions were violated)
+ * @param failureSpec the failure scenario tested in this run
+ * @param model the model of the program produced by this run
+ * @param messages the set of messages exchanged during this run
+ * @param provenance the forest of provenance trees produced for this run
+ */
+case class Run(
+  iteration: Int,
+  status: RunStatus,
+  failureSpec: FailureSpec,
+  model: UltimateModel,
+  messages: List[Message],
+  provenance: List[GoalNode])
+
+/**
+ * Implements Molly's main forwards-backwards verification loop.
+ *
+ * @param failureSpec a description of possible failure scenarios that the verifier is allowed
+ *                    to consider
+ * @param program the program to verify
+ * @param solver the solver to use (either Z3 or SAT4J)
+ * @param causalOnly TODO(josh): Document this
+ * @param useSymmetry if true, use symmetry analysis to prune the exploration of failure scenarios
+ *                    that are isomorphic to ones that we have already considered
+ * @param negativeSupport if true, explore beneath negative subgoals when constructing provenance
+ *                        trees
+ * @param metricRegistry a CodaHale metrics registry, for logging performance statistics
+ */
+class Verifier(
+  failureSpec: FailureSpec,
+  program: Program,
+  solver: Solver = Z3Solver,
+  causalOnly: Boolean  = false,
+  useSymmetry: Boolean = false,
+  negativeSupport: Boolean = false
+)(implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
 
   private val failureFreeSpec = failureSpec.copy(eff = 0, maxCrashes = 0)
   private val failureFreeProgram = DedalusTyper.inferTypes(failureFreeSpec.addClockFacts(program))
@@ -50,6 +87,9 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
     mutable.HashSet[FailureSpec]()
   }
 
+  /**
+   * Same as `verify`, except uses a naive random exploration of the space of possible failures.
+   */
   def random: EphemeralStream[Run] = {
     val provenanceReader =
       new ProvenanceReader(failureFreeProgram, failureFreeSpec, failureFreeUltimateModel, negativeSupport)
@@ -105,8 +145,13 @@ class Verifier(failureSpec: FailureSpec, program: Program, solver: Solver = Z3So
       Run(runId.getAndIncrement, RunStatus("failure"), randomSpec, model, messages, Nil)
     }
   }
-      
 
+
+  /**
+   * Run the verification, returning a lazy ephemeral stream of results.  You can perform
+   * `filter` or `dropWhile` operations on this stream in order to run the verifier until
+   * it finds a counterexample or terminates.
+   */
   def verify: EphemeralStream[Run] = {
     logger.warn(s"DO verify")
     val provenanceReader =
