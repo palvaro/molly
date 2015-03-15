@@ -1,8 +1,9 @@
 package edu.berkeley.cs.boom.molly.symmetry
 
-import com.typesafe.scalalogging.LazyLogging
 import edu.berkeley.cs.boom.molly.ast.{Predicate, Program, StringLiteral}
 import edu.berkeley.cs.boom.molly.{DedalusType, DedalusTyper, FailureSpec}
+
+import com.typesafe.scalalogging.LazyLogging
 
 /**
  * Decides whether two failure scenarios are equivalent.
@@ -18,8 +19,8 @@ import edu.berkeley.cs.boom.molly.{DedalusType, DedalusTyper, FailureSpec}
  */
 class SymmetryChecker(program: Program, nodes: List[String]) extends LazyLogging {
 
-  type EDB = Set[Predicate]
-  type TableTypes = Map[String, List[DedalusType]]
+  private type EDB = Set[Predicate]
+  private type TableTypes = Map[String, List[DedalusType]]
 
   private val typesForTable: TableTypes = {
     val fs = FailureSpec(1, 0, 0, nodes)  // TODO: shouldn't have to add dummy clocks to typecheck
@@ -27,7 +28,7 @@ class SymmetryChecker(program: Program, nodes: List[String]) extends LazyLogging
     tables.map { t => (t.name, t.types)}.toMap
   }
 
-  val locationLiteralsThatAppearInRules: Set[String] = {
+  private val locationLiteralsThatAppearInRules: Set[String] = {
     val predicates = program.rules.flatMap(_.bodyPredicates).filter(_.tableName != "clock")
     predicates.collect { case pred@Predicate(table, cols, _, _) =>
       val colTypes = typesForTable(table)
@@ -54,7 +55,7 @@ class SymmetryChecker(program: Program, nodes: List[String]) extends LazyLogging
   // clock and crash facts.  So, we pre-compute a set of symmetries for the fixed portion of the
   // EDB, and then we only need to check symmetry of the clock and crash relations once we're
   // comparing two failure specs.
-  val possiblySymmetricForStableEDB: Seq[Map[String, String]] = {
+  private val possiblySymmetricForStableEDB: Seq[Map[String, String]] = {
     // The `drop` here is so that we skip the identity mapping:
     val remappings = possiblySymmetricBasedOnRules.permutations.drop(1).map { p =>
       possiblySymmetricBasedOnRules.zip(p).toMap }
@@ -68,6 +69,10 @@ class SymmetryChecker(program: Program, nodes: List[String]) extends LazyLogging
     logger.debug(s"Candidates that provide stable EDB symmetry are {${possiblySymmetricForStableEDB.mkString(", ")}}")
   }
 
+  /**
+   * @return true if the two failure specifications are equivalent (according to the definition
+   *         listed above)
+   */
   def areEquivalentForEDB(a: FailureSpec, b: FailureSpec): Boolean = {
     if (possiblySymmetricForStableEDB.isEmpty) return false
     require (a.nodes == nodes && b.nodes == nodes)
@@ -80,8 +85,10 @@ class SymmetryChecker(program: Program, nodes: List[String]) extends LazyLogging
   /**
    * Apply a function to location-valued EDB columns
    */
-  private def mapLocations(edb: EDB, typesForTable: TableTypes,
-                           f: PartialFunction[String, String]): EDB = {
+  private def mapLocations(
+      edb: EDB,
+      typesForTable: TableTypes,
+      f: PartialFunction[String, String]): EDB = {
     edb.map { case fact @ Predicate(table, cols, _, _) =>
       val colTypes = typesForTable(table)
       val newCols = cols.zip(colTypes).map {
