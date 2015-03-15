@@ -42,7 +42,12 @@ case class Program(
   tables: Set[Table] = Set()
 ) extends TreeNode
 
-case class Table(name: String, types: List[DedalusType])
+case class Table(name: String, types: List[DedalusType]) {
+  types.headOption.foreach { t =>
+    assert(t == DedalusType.LOCATION,
+      s"First column of a table must have type LOCATION, but found $t")
+  }
+}
 
 sealed trait Clause extends TreeNode
 case class Include(file: String) extends Clause

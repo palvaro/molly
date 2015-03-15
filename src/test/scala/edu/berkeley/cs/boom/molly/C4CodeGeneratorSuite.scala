@@ -23,8 +23,8 @@ class C4CodeGeneratorSuite extends FunSuite with ShouldMatchers {
     // This requirement is a workaround for https://github.com/bloom-lang/c4/issues/1
     val prog =
       """
-        | foo(1);
-        | bar(1);
+        | foo("1");
+        | bar("1");
         | baz(X) :- notin bar(X), foo(X);
       """.stripMargin
     val code = prog |> parseProgram |> inferTypes |> C4CodeGenerator.generate

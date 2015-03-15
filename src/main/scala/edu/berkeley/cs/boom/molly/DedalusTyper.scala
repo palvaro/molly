@@ -115,13 +115,18 @@ object DedalusTyper {
         (colRefToMinColRef.find(("clock", 2)), (null, INT)),
         (colRefToMinColRef.find(("clock", 3)), (null, INT))
       )
+      val firstColumnTypeIsLocation = for (
+        pred <- allPredicates;
+        (col, colNum) <- pred.cols.zipWithIndex
+        if colNum == 0
+      ) yield (colRefToMinColRef.find((pred.tableName, colNum)), (col, LOCATION))
       val inferredFromPredicates = for (
         pred <- allPredicates;
         (col, colNum) <- pred.cols.zipWithIndex;
         inferredType = inferTypeOfAtom(col)
         if inferredType != UNKNOWN
       ) yield (colRefToMinColRef.find((pred.tableName, colNum)), (col, inferredType))
-      val evidence = inferredFromPredicates ++ metaEDBTypes
+      val evidence = inferredFromPredicates ++ metaEDBTypes ++ firstColumnTypeIsLocation
       evidence.groupBy(_._1).mapValues(_.map(_._2).toSet)
     }
 
