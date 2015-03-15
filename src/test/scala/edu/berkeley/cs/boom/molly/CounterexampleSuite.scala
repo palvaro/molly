@@ -1,11 +1,13 @@
 package edu.berkeley.cs.boom.molly
 
 import org.scalatest.prop.TableDrivenPropertyChecks
+import org.scalatest.tags.Slow
 import org.scalatest.{Matchers, PropSpec}
 import java.io.File
 import com.codahale.metrics.MetricRegistry
 
 
+@Slow
 class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with Matchers {
 
   val examplesFTPath = SyncFTChecker.getClass.getClassLoader.getResource("examples_ft").getPath

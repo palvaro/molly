@@ -33,3 +33,8 @@ get-submodules:
 	git submodule update
 
 CMAKE-installed:
+
+# SBT command for running only the fast unit tests and excluding the slower
+# end-to-end tests (which have been tagged using ScalaTest's `Slow` tag):
+fast-test: deps
+	sbt "testOnly *Suite -- -l org.scalatest.tags.Slow"
