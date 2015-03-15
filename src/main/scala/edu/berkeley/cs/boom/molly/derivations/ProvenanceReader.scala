@@ -1,7 +1,7 @@
 package edu.berkeley.cs.boom.molly.derivations
 
 import edu.berkeley.cs.boom.molly.ast._
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.LazyLogging
 import edu.berkeley.cs.boom.molly.ast.StringLiteral
 import edu.berkeley.cs.boom.molly.ast.Rule
 import edu.berkeley.cs.boom.molly.{FailureSpec, UltimateModel}
@@ -38,7 +38,7 @@ object ProvenanceReader {
 class ProvenanceReader(program: Program,
                        failureSpec: FailureSpec,
                        model: UltimateModel, negativeSupport: Boolean)
-                      (implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
+                      (implicit val metricRegistry: MetricRegistry) extends LazyLogging with InstrumentedBuilder {
   import ProvenanceReader._
 
 
@@ -227,7 +227,7 @@ class ProvenanceReader(program: Program,
 case class DependsInfo(from: Predicate, to: Predicate, nonmonotonic: Boolean, temporality: Option[Time])
 
 class ProvenanceTableManager(program: Program, model: UltimateModel, failureSpec: FailureSpec)
-  extends Logging {
+  extends LazyLogging {
   import ProvenanceReader._
 
   private val tableNamePattern = """^(.*)_prov\d+$""".r

@@ -5,7 +5,7 @@ import com.codahale.metrics.MetricRegistry
 import edu.berkeley.cs.boom.molly.util.SetUtils
 import nl.grons.metrics.scala.{MetricName, MetricBuilder}
 import scala.language.implicitConversions
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.LazyLogging
 
 /**
  * SolverVariables are used to map message losses and failures into SAT / SMT formula variables.
@@ -23,7 +23,7 @@ case class Not(v: SolverVariable) extends SolverVariable
 /**
  * Interface for pluggable SAT / SMT solver backends.
  */
-trait Solver extends Logging {
+trait Solver extends LazyLogging {
 
   /**
    * Given the derivation of a good outcome, computes a set of potential falsifiers of that outcome.

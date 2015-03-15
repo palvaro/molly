@@ -5,7 +5,7 @@ import scala.collection.mutable
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.codahale.metrics.MetricRegistry
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.LazyLogging
 import nl.grons.metrics.scala.InstrumentedBuilder
 import scalaz._
 
@@ -56,7 +56,7 @@ class Verifier(
   causalOnly: Boolean  = false,
   useSymmetry: Boolean = false,
   negativeSupport: Boolean = false
-)(implicit val metricRegistry: MetricRegistry) extends Logging with InstrumentedBuilder {
+)(implicit val metricRegistry: MetricRegistry) extends LazyLogging with InstrumentedBuilder {
 
   private val failureFreeSpec = failureSpec.copy(eff = 0, maxCrashes = 0)
   private val failureFreeProgram = DedalusTyper.inferTypes(failureFreeSpec.addClockFacts(program))

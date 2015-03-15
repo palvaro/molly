@@ -1,6 +1,6 @@
 package edu.berkeley.cs.boom.molly.symmetry
 
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.LazyLogging
 import edu.berkeley.cs.boom.molly.ast.{Predicate, Program, StringLiteral}
 import edu.berkeley.cs.boom.molly.{DedalusType, DedalusTyper, FailureSpec}
 
@@ -16,7 +16,7 @@ import edu.berkeley.cs.boom.molly.{DedalusType, DedalusTyper, FailureSpec}
  * In our case, we only consider isomorphisms that change the values of location-typed attributes
  * in the EDB.
  */
-class SymmetryChecker(program: Program, nodes: List[String]) extends Logging {
+class SymmetryChecker(program: Program, nodes: List[String]) extends LazyLogging {
 
   type EDB = Set[Predicate]
   type TableTypes = Map[String, List[DedalusType]]

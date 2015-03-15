@@ -1,7 +1,7 @@
 package edu.berkeley.cs.boom.molly
 
 import java.io.File
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.prop.TableDrivenPropertyChecks.{Table => ScalatestTable}
 import com.codahale.metrics.MetricRegistry
 import java.util.concurrent.TimeUnit
@@ -14,7 +14,7 @@ import scala.concurrent._
 import ExecutionContext.Implicits.global
 import scala.language.postfixOps
 
-object Harness extends Logging {
+object Harness extends LazyLogging {
 
   val objectMapper = new ObjectMapper().registerModule(
     new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, false))

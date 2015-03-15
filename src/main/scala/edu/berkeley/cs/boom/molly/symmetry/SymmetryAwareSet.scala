@@ -3,12 +3,12 @@ package edu.berkeley.cs.boom.molly.symmetry
 import edu.berkeley.cs.boom.molly.FailureSpec
 import com.codahale.metrics.MetricRegistry
 import scala.collection.mutable
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.LazyLogging
 import nl.grons.metrics.scala.InstrumentedBuilder
 
 
 class SymmetryAwareSet(symmetryChecker: SymmetryChecker)(implicit val metricRegistry: MetricRegistry)
-  extends mutable.Set[FailureSpec] with Logging with InstrumentedBuilder {
+  extends mutable.Set[FailureSpec] with LazyLogging with InstrumentedBuilder {
 
   private type SpecHash = (Set[(Int, Int)], Set[(Int, Int)], Set[Int])
   private val backingMap = mutable.HashMap[SpecHash, mutable.Set[FailureSpec]]()

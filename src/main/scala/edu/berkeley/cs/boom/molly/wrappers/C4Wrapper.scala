@@ -3,14 +3,14 @@ package edu.berkeley.cs.boom.molly.wrappers
 import edu.berkeley.cs.boom.molly.UltimateModel
 import edu.berkeley.cs.boom.molly.ast.{IntLiteral, Program}
 import jnr.ffi.LibraryLoader
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.LazyLogging
 import edu.berkeley.cs.boom.molly.codegen.C4CodeGenerator
 import nl.grons.metrics.scala.InstrumentedBuilder
 import com.codahale.metrics.MetricRegistry
 
 
 class C4Wrapper(name: String, program: Program)
-               (implicit val metricRegistry: MetricRegistry)  extends Logging with InstrumentedBuilder {
+               (implicit val metricRegistry: MetricRegistry)  extends LazyLogging with InstrumentedBuilder {
 
   private val time = metrics.timer("time")
 

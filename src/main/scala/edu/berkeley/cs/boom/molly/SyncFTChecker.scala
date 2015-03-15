@@ -3,7 +3,7 @@ package edu.berkeley.cs.boom.molly
 import java.io.File
 import scala.io.Source
 import pl.project13.scala.rainbow._
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.LazyLogging
 import edu.berkeley.cs.boom.molly.DedalusRewrites._
 import edu.berkeley.cs.boom.molly.DedalusParser._
 import edu.berkeley.cs.boom.molly.report.HTMLWriter
@@ -30,7 +30,7 @@ case class Config(
   maxRuns: Int = Int.MaxValue
 )
 
-object SyncFTChecker extends Logging {
+object SyncFTChecker extends LazyLogging {
   val parser = new scopt.OptionParser[Config]("syncftChecker") {
     head("syncftchecker", "0.1")
     opt[Int]('t', "EOT") text "end of time (default 3)" action { (x, c) => c.copy(eot = x)}
