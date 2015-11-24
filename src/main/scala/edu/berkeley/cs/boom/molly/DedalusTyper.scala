@@ -134,7 +134,7 @@ object DedalusTyper {
     val numColsInTable = allPredicates.groupBy(_.tableName).mapValues { predicates =>
       val colCounts = predicates.map(_.cols.size).toSet
       assert(colCounts.size == 1,
-        s"Predicate ${predicates.head.tableName} used with inconsistent number of columns")
+        s"Predicate ${predicates.head.tableName} used with inconsistent number of columns in $predicates")
       colCounts.head
     } + ("clock" -> 4) + ("crash" -> 4)
 
