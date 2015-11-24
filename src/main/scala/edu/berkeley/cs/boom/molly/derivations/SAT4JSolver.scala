@@ -10,6 +10,12 @@ import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
 import nl.grons.metrics.scala.MetricBuilder
 
+import optimus.optimization._
+
+import pprint.Config.Defaults._
+
+import sext._
+
 object SAT4JSolver extends Solver {
 
   protected def solve(failureSpec: FailureSpec, goal: GoalNode,
@@ -33,24 +39,24 @@ object SAT4JSolver extends Solver {
     implicit def satVarsToVecInt(clause: Iterable[SolverVariable]): IVecInt =
       new VecInt(clause.map(satVarToInt).toArray)
 
-    val distinctGoalDerivations = metrics.timer("proof-tree-enumeration").time {
-      goal.enumerateDistinctDerivations
-    }
-    val foo = distinctGoalDerivations.size
-    logger.debug(s"dgd: $foo")
+    var timer = System.currentTimeMillis();
+    val bf = BooleanFormula(goal.booleanFormula).simplifyAll.flipPolarity
+    logger.debug(s"initial formula \n${bf.treeString}")
+    logger.debug(s"${System.currentTimeMillis()-timer} millis -- simplification")
+    timer = System.currentTimeMillis();
+    val formula = bf.convertToCNFAll
+    logger.debug(s"${System.currentTimeMillis()-timer} millis -- CNF")
 
-    // Crash failures:
-    // Only nodes that sent messages (or that are assumed to have crashed as part of the seed)
-    // will be candidates for crashing:
     val importantNodes: Set[String] =
-      distinctGoalDerivations.flatMap(_.importantClocks).filter(_._3 < failureSpec.eot).map(_._1).toSet ++
-        seed.collect { case cf: CrashFailure => cf.node }
+      formula.root.vars.filter(_._3 < failureSpec.eot).map(_._1).toSet ++
+    seed.collect { case cf: CrashFailure => cf.node }
     if (importantNodes.isEmpty) {
       logger.debug(s"Goal ${goal.tuple} has no important nodes; skipping SAT solver")
       return Set.empty
     } else {
       logger.debug(s"Goal ${goal.tuple} has important nodes $importantNodes")
     }
+
     // Add constraints to ensure that each node crashes at a single time, or never crashes:
     for (node <- importantNodes) {
       // There's no point in considering crashes before the first time that a node sends a message,
@@ -58,6 +64,7 @@ object SAT4JSolver extends Solver {
       val firstSendTime = firstMessageSendTimes.getOrElse(node, 1)
       // Create one variable for every time at which the node could crash
       val crashVars = (firstSendTime to failureSpec.eot - 1).map(t => CrashFailure(node, t))
+      //val crashVars = (firstSendTime to failureSpec.eff).map(t => CrashFailure(node, t))
       // Include any crashes specified in the seed, since they might be excluded by the
       // "no crashes before the first message was sent" constraint:
       val seedCrashes = seed.collect { case c: CrashFailure => c }
@@ -69,26 +76,23 @@ object SAT4JSolver extends Solver {
     // If there are at most C crashes, then at least (N - C) nodes never crash:
     solver.addAtLeast(failureSpec.nodes.map(NeverCrashed), failureSpec.nodes.size - failureSpec.maxCrashes)
 
-    // Message losses:
-    for (
-      derivation <- distinctGoalDerivations;
-      importantClocks = derivation.importantClocks
-      if !importantClocks.isEmpty
+    for (disjunct <- formula.conjuncts.conjunctz;
+        if !disjunct.disjuncts.isEmpty
     ) {
-      // The message could be missing due to a message loss or due to its
-      // sender having crashed at an earlier timestamp:
-      val messageLosses = importantClocks.map(MessageLoss.tupled)
+      val messageLosses = disjunct.disjuncts.map(MessageLoss.tupled)
       val crashes = messageLosses.flatMap { loss =>
         val firstSendTime = firstMessageSendTimes.getOrElse(loss.from, 1)
         val crashTimes = firstSendTime to loss.time
         crashTimes.map ( t => CrashFailure(loss.from, t))
       }
-      //logger.debug(s"$derivation loss possibility: $messageLosses")
+      //logger.warn(s"loss possibility: $messageLosses")
+      //logger.warn(s"crash possibility: $crashes")
+
       solver.addClause(messageLosses ++ crashes)
     }
+
     // Assume any message losses that have already occurred & disallow failures at or after the EFF
-    val nonCrashes = distinctGoalDerivations.flatMap(_.importantClocks)
-      .filter(_._3 >= failureSpec.eff).map(MessageLoss.tupled).map(Not)
+    val nonCrashes = formula.root.vars.filter(_._3 >= failureSpec.eff).map(MessageLoss.tupled).map(Not)
     val assumptions = seed ++ nonCrashes
 
     val models = ArrayBuffer[Set[SolverVariable]]()
@@ -103,6 +107,7 @@ object SAT4JSolver extends Solver {
       }
     }
     solver.reset()  // Required to allow the solver to be GC'ed.
+    //logger.de("RETURNING with " + models.size)
     models
   }
 }
