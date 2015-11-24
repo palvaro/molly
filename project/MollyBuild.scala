@@ -7,6 +7,7 @@ object BuildSettings {
     organization := "edu.berkeley.cs.boom",
     version := "0.1-SNAPSHOT",
     scalaVersion := "2.11.6",
+    //scalaVersion := "2.10.3",
     resolvers ++= Seq(
       Resolver.sonatypeRepo("snapshots"),
       Resolver.sonatypeRepo("releases"),
@@ -27,6 +28,7 @@ object MollyBuild extends Build {
     settings = buildSettings ++ Seq(
       scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
       scalaVersion in scalaZ3 := "2.11.2",
+      scalaVersion in "bloom-compiler" := "2.10.3",
       libraryDependencies ++= Seq(
         "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
         "org.slf4j" % "slf4j-log4j12" % "1.7.5",
@@ -35,7 +37,7 @@ object MollyBuild extends Build {
         "com.googlecode.kiama" %% "kiama" % "1.6.0",
         "com.github.scopt" %% "scopt" % "3.2.0",
         "org.apache.commons" % "commons-math3" % "3.2",
-        "com.github.jnr" % "jnr-ffi" % "1.0.10",
+        "com.github.jnr" % "jnr-ffi" % "2.0.1",
         "io.argonaut" %% "argonaut" % "6.0.4",
         "org.ow2.sat4j" % "org.ow2.sat4j.core" % "2.3.5",
         "commons-io" % "commons-io" % "2.4",
@@ -46,7 +48,10 @@ object MollyBuild extends Build {
         "nl.grons" %% "metrics-scala" % "3.2.0_a2.3",
         "com.codahale.metrics" % "metrics-json" % "3.0.2",
         "org.codehaus.jackson" % "jackson-mapper-asl" % "1.9.13",
-        "com.github.tototoshi" %% "scala-csv" % "1.0.0"
+        "com.github.tototoshi" %% "scala-csv" % "1.0.0",
+        "com.lihaoyi" %% "pprint" % "0.3.6",
+        "com.github.nikita-volkov" % "sext" % "0.2.4",
+        "com.github.vagm" %% "optimus" % "1.2.1"
       )
     )
   ).dependsOn(scalaZ3)
