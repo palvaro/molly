@@ -1,15 +1,17 @@
 package edu.berkeley.cs.boom.molly
 
+import org.scalactic.Explicitly
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.tags.Slow
-import org.scalatest.{Matchers, PropSpec}
+import org.scalatest.{FlatSpec, Matchers, PropSpec}
 import java.io.File
 import com.codahale.metrics.MetricRegistry
+import Explicitly._
 
 
 @Slow
 class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with Matchers {
-
+//class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks  {
   val examplesFTPath = SyncFTChecker.getClass.getClassLoader.getResource("examples_ft").getPath
 
   val scenarios = Table(
@@ -61,18 +63,22 @@ class CounterexampleSuite extends PropSpec with TableDrivenPropertyChecks with M
     (Seq("kafka.ded"),                           7,      4,     Seq("a", "b", "c", "C", "Z"),       0,    false)
   )
 
+
   property("SAT guided search should correctly find counterexamples") {
+
     forAll(scenarios) { (inputPrograms: Seq[String], eot: Int, eff: Int, nodes: Seq[String], crashes: Int, shouldFindCounterexample: Boolean) =>
       val inputFiles = inputPrograms.map(name => new File(examplesFTPath, name))
       val config = Config(eot, eff, crashes, nodes, inputFiles)
       val metrics = new MetricRegistry
       val results = SyncFTChecker.check(config, metrics)
       val counterexamples = results.filter(_.status == RunStatus("failure")).map(_.failureSpec)
+
       if (shouldFindCounterexample) {
         counterexamples should not be empty
       } else {
         counterexamples should be (empty)
       }
+
     }
   }
 }

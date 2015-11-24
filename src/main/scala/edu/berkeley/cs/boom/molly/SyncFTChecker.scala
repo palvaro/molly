@@ -11,7 +11,7 @@ import com.codahale.metrics.{Slf4jReporter, MetricRegistry}
 import java.util.concurrent.TimeUnit
 import scalaz.syntax.id._
 import scalaz.EphemeralStream
-import edu.berkeley.cs.boom.molly.derivations.{SAT4JSolver, Z3Solver}
+import edu.berkeley.cs.boom.molly.derivations.{SAT4JSolver, Z3Solver, ILPSolver}
 
 
 case class Config(
@@ -21,6 +21,7 @@ case class Config(
   nodes: Seq[String] = Seq(),
   inputPrograms: Seq[File] = Seq(),
   strategy: String = "sat",
+  //solver: String = "sat4j",
   solver: String = "z3",
   useSymmetry: Boolean = false,
   generateProvenanceDiagrams: Boolean = false,
@@ -37,7 +38,7 @@ object SyncFTChecker extends LazyLogging {
     opt[Int]('f', "EFF") text "end of finite failures (default 2)" action { (x, c) => c.copy(eff = x)}
     opt[Int]('c', "crashes") text "crash failures (default 0)" action { (x, c) => c.copy(crashes = x)}
     opt[String]('N', "nodes") text "a comma-separated list of nodes (required)" required() action { (x, c) => c.copy(nodes = x.split(','))}
-    opt[String]("solver") text "the solver to use ('z3' or 'sat4j')" action { (x, c) => c.copy(solver = x)} validate { x => if (x != "z3" && x != "sat4j") failure("solver should be 'z3' or 'sat4j'") else success }
+    opt[String]("solver") text "the solver to use ('z3' or 'sat4j' or 'ilp')" action { (x, c) => c.copy(solver = x)} validate { x => if (x != "z3" && x != "sat4j" && x != "ilp") failure("solver should be 'z3' or 'sat4j' or 'ilp'") else success }
     opt[String]("strategy") text "the search strategy ('sat', 'random' or 'pcausal')" action { (x, c) => c.copy(strategy = x)} validate { x => if (x != "sat" && x != "random" && x != "pcausal") failure("strategy should be 'sat', 'random', or 'pcausal'") else success }
     opt[Unit]("use-symmetry") text "use symmetry to skip equivalent failure scenarios" action { (x, c) => c.copy(useSymmetry = true) }
     opt[Unit]("prov-diagrams") text "generate provenance diagrams for each execution" action { (x, c) => c.copy(generateProvenanceDiagrams = true) }
@@ -71,6 +72,7 @@ object SyncFTChecker extends LazyLogging {
     val solver = config.solver match {
       case "z3" => Z3Solver
       case "sat4j" => SAT4JSolver
+      case "ilp" => ILPSolver
       case s => throw new IllegalArgumentException(s"unknown solver $s")
     }
     val verifier = new Verifier(failureSpec, program, solver, causalOnly = (config.strategy == "pcausal"),

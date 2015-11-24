@@ -40,7 +40,9 @@ trait Solver extends LazyLogging {
       goals: List[GoalNode],
       messages: Seq[Message],
       seed: Set[SolverVariable] = Set.empty)
-      (implicit metricRegistry: MetricRegistry): Set[FailureSpec] = {
+      //(implicit metricRegistry: MetricRegistry): Set[FailureSpec] = {
+      (implicit metricRegistry: MetricRegistry): Seq[FailureSpec] = {
+
 
     implicit val metrics = new MetricBuilder(MetricName(getClass), metricRegistry)
 
@@ -51,7 +53,8 @@ trait Solver extends LazyLogging {
     val minimalModels: Seq[Set[SolverVariable]] = SetUtils.minimalSets(models.toSeq)
     logger.info(s"SAT problem has ${minimalModels.size} minimal solutions")
     logger.debug(s"Minimal SAT solutions are:\n${minimalModels.map(_.toString()).mkString("\n")}")
-    minimalModels.flatMap(vars => Solver.solutionToFailureSpec(failureSpec, vars)).toSet
+    //minimalModels.flatMap(vars => Solver.solutionToFailureSpec(failureSpec, vars)).toSet
+    minimalModels.flatMap(vars => Solver.solutionToFailureSpec(failureSpec, vars))
   }
 
   /**

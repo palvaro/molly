@@ -88,7 +88,8 @@ class ProvenanceReader(program: Program,
     val tupleWasDerived = model.tables(goalTuple.table).exists(matchesPattern(goalTuple.cols))
     lazy val ruleFirings = findRuleFirings(goalTuple)
     logger.debug(s"Reading provenance for tuple $goalTuple $tupleWasDerived")
-    if (goalTuple.negative) {
+
+    if (goalTuple.negative && negativeSupport) {
       // a conservative overapproximation of the facts whose existence make goalTuple false
       val causes = provTableManager.possibleCauses(goalTuple)
       /* we need a stub rule node, which requires at least one stub table,
@@ -96,13 +97,15 @@ class ProvenanceReader(program: Program,
          goalTuple is negatively reachable could, if falsified, make goalTuple true */
       val phonyPred = Predicate("phonyGoal", List(StringLiteral("someplace")), false, None)
       val phonyRule = Rule(Predicate("phony",List(),false, None),List(Left(phonyPred)))
+
       if (causes.isEmpty) {
         logger.debug(s"no causes for $goalTuple")
         RealGoalNode(goalTuple, Set())
       } else {
-        logger.warn(s"possible causes of $goalTuple: $causes")
+        logger.debug(s"possible causes of $goalTuple: $causes")
         RealGoalNode(goalTuple, Set(RuleNode(phonyRule, causes.map(getDerivationTree).toSet)))
       }
+      //RealGoalNode(goalTuple, Set())
     } else { // goalTuple is positive
       if (isInEDB(goalTuple)) {
         logger.debug(s"Found $goalTuple in EDB")

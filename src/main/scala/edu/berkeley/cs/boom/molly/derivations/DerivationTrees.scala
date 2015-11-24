@@ -74,6 +74,8 @@ trait GoalNode extends DerivationTreeNode {
    */
   lazy val enumerateDistinctDerivations: Set[(GoalNode)] = Set()
 
+  def booleanFormula: BFNode[(String, String, Int)]
+
   /**
    * The set of rule firings that derive this goal.
    */
@@ -120,6 +122,20 @@ case class RealGoalNode(
     }
   }
 
+  def booleanFormula: BFNode[(String, String, Int)] = {
+    BFAndNode(BFLiteral(ownImportantClock), makeBooleanFormula(pRules.toList))
+  }
+
+  def makeBooleanFormula(rules: List[RuleNode]): BFNode[(String, String, Int)] = {
+    if (rules.size == 0) {
+      BFLiteral(None)
+    } else if (rules.size == 1) {
+      rules.head.booleanFormula
+    } else {
+      BFOrNode(rules.head.booleanFormula, makeBooleanFormula(rules.tail))
+    }
+  }
+
   override def allTups: Set[GoalTuple] = {
     Set(tuple) ++ rules.flatMap(r => r.subgoals.flatMap(s => s.allTups))
   }
@@ -147,6 +163,10 @@ case class PhonyGoalNode(
     Set(this)
   }
 
+  def booleanFormula: BFNode[(String, String, Int)] = {
+    BFLiteral(None)
+  }
+
 }
 
 /**
@@ -166,6 +186,19 @@ case class RuleNode(
       Nil
     } else {
       choices.sequence.map(subgoalDerivations => this.copy(subgoals = subgoalDerivations.toSet))
+    }
+  }
+
+  def booleanFormula: BFNode[(String, String, Int)] = {
+    makeBooleanFormula(subgoals.toList)
+  }
+
+  def makeBooleanFormula(goals: List[GoalNode]): BFNode[(String, String, Int)] = {
+    if (goals.size == 1) {
+      goals.head.booleanFormula
+    } else {
+      BFAndNode(goals.head.booleanFormula, makeBooleanFormula(goals.tail))
+      //BFOrNode(goals.head.booleanFormula, makeBooleanFormula(goals.tail))
     }
   }
 }
