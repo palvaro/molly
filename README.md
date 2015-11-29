@@ -80,9 +80,28 @@ Finally, the last line says that any node that receives a broadcast should put i
 
 #### Specifications
 
-Molly needs a way to check whether injected failures actually violated program correctness properties.  A natural way to express such properties is as an implication of the form "*If* some precondition holds, *then* some postcondition must hold."
+Molly needs a way to check whether injected failures actually violated program correctness properties.  A natural way to express such properties is as an implication of the form "*If* some precondition holds, *then* some postcondition must hold."  For example, the broadcast protocol described above can succinctly be expressed in the following way:
+
+ * _Precondition_: *Any* correct process delivers a message *m*
+ * _Postcondition_: *All* correct processes deliver *m*
+ 
+Any execution in which the precondition holds but the postcondition does not is a counterexample to the correctness property.  Executions in which the precondition does not hold (we can always always find one by dropping all messages) are vacuously correct.
 
 
 You may specify correctness properties by providing rules that define two special relations:
 
- * pre() -- To rule out vacuously correct executions (e.g., those in which no messages are exchanged), we often need to identify when an execution has satisfied some property.
+ * pre() 
+ * post()
+ 
+For example:
+
+    pre(X, Pl) :- log(X, Pl), notin bcast(X, Pl)@1, notin crash(X, X, _);
+
+For every node X that has a payload Pl in its log, there is a record (X, Pl) in pre, provided that X was not the original broadcaster and X did not crash.
+
+    post(X, Pl) :- log(X, Pl), notin missing_log(_, Pl);
+    missing_log(A, Pl) :- log(X, Pl), node(X, A), notin log(A, Pl);
+    
+There is a record (X, Pl) in post if some node X has a payload Pl in its log, and there are *no* nodes that do not.
+    
+    
