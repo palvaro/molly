@@ -1,0 +1,17 @@
+// reliable broadcast.  send the contents of the log to all neighbors, infinitely often.
+// neighbors relay the log in the same fasion.
+
+include "./bcast_edb.ded";
+//include "./simplog.ded";
+
+// why does the (tiny, semantically equivalent) program below have produce different runs?
+//include "./rdlog.ded";
+//bcast(N, P)@next :- log(N, P);
+
+node(Node, Neighbor)@next :- node(Node, Neighbor);
+log(Node, Pload)@next :- log(Node, Pload);
+log(Node2, Pload)@async :- log(Node1, Pload), node(Node1, Node2);
+log(N, P) :- bcast(N, P);
+bcast(N, P)@next :- log(N, P);
+
+//log(Node2, Pload)@async :- log(Node1, Pload), node(Node1, Node2);

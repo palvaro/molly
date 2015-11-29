@@ -1,0 +1,14 @@
+begin_delete(Leader, Server, Id) :- ja(Leader, _, Id, _, "R"), running_group_req(Leader, _, Id, Group), lencoding(Leader, Group, Server);
+begin_delete(L, S, I)@next :- begin_delete(L, S, I), notin end_delete(L, I);
+
+d(S, L, I)@async :- begin_delete(L, S, I), notin end_delete(L, I);
+
+da(Leader, Server, Id)@async :- d(Server, Leader, Id);
+
+da_log(L, S, I) :- da(L,S,I);
+da_log(L, S, I)@next :- da_log(L,S,I);
+
+missing(L, S, I) :- begin_delete(L, S, I), notin da_log(L, S, I);
+end_delete(L, I) :- begin_delete(L, _, I), notin missing(L, _, I);
+
+//da_missing() :-

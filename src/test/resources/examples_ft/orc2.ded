@@ -1,0 +1,24 @@
+service1(H, S)@next :- service1(H, S);
+service2(H, S)@next :- service2(H, S);
+response(H, S, P, C)@next :- response(H, S, P, C);
+page(S, P, C)@next :- page(S, P, C);
+
+
+request(S, H, P)@async :- gt(H, P), service1(H, S);
+response(H, S, P, C)@async :- request(S, H, P), page(S, P, C);
+
+delay(H, P)@async :- gt(H, P);
+
+timeout(H, P)@async :- delay(H, P);
+
+request(S, H, P)@async :- timeout(H, P), service2(H, S), notin response(H, _, P, _);
+
+
+service1("a", "b")@1;
+service2("a", "c")@1;
+gt("a", "indx")@1;
+
+page("b", "indx", "hello")@1;
+page("c", "indx", "hello")@1;
+
+//bad(H, P) :- gt(H, P)@1, notin response(H, _, P, _);

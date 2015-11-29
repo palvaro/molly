@@ -1,0 +1,17 @@
+begin("C", "hello")@1;
+
+
+agent("C", "a")@1;
+agent("C", "b")@1;
+agent("C", "d")@1;
+agent("a", "b")@1;
+agent("a", "d")@1;
+agent("b", "a")@1;
+agent("b", "d")@1;
+agent("d", "a")@1;
+agent("d", "b")@1;
+
+// both agents can commit
+can("a", "hello")@1;
+can("b", "hello")@1;
+can("d", "hello")@1;

@@ -1,0 +1,11 @@
+// classic reliable broadcast.  send the contents of the log to all neighbors, once.
+// neighbors relay the log in the same fasion, once only
+include "./bcast_edb.ded";
+
+node(Node, Neighbor)@next :- node(Node, Neighbor);
+log(Node, Pload)@next :- log(Node, Pload);
+ack(S, H, P)@next :- ack(S, H, P);
+rbcast(Node2, Node1, Pload)@async :- log(Node1, Pload), node(Node1, Node2), notin ack(Node1, Node2, Pload);
+ack(From, Host, Pl)@async :- rbcast(Host, From, Pl);
+rbcast(A, A, P) :- bcast(A, P);
+log(N, P) :- rbcast(N, _, P);

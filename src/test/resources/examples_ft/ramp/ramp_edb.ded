@@ -1,0 +1,17 @@
+// inputs
+// ASSUME FOR NOW: one write per client per timestamp.
+write("C", "a|b", "foo")@1;
+write("C2", "b|c", "bar")@1;
+write("C", "a|c", "baz")@1;
+
+
+read("C", "b|c")@7;
+read("C", "a|b")@8;
+read("C2", "a|b")@7;
+read("C2", "b|c")@8;
+//read("C2", "b|c")@5;
+//read("C2", "c|d")@7;
+
+
+seq_begin("C", "Main")@1;
+seq_begin("C2", "Main")@1;

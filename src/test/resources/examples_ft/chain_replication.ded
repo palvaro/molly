@@ -1,0 +1,72 @@
+// tiny model of the hdfs data pipeline described in Gunawi et al'10.
+
+
+include "./heartbeat.ded";
+
+
+//pipeline_length(N,  count<D>) :- pipeline(N, D, _);
+//pipeline(N,  D, "NONE") :- xfer
+
+
+first_node(Namenode, Id, First) :- pipeline(Namenode, Id, First, Next), notin pipeline(Namenode, Id, _, First);
+
+// send the pipeline metadata to all nodes (eagerly)
+pipeline(H, I, F, N)@async :- pipeline(M, I, F, N), datanode(M, H, _);
+pipeline(H, I, F, N)@next :- pipeline(H, I, F, N);
+
+
+snd(Host, Id, Pl)@async :- xfer(N, Id, Pl), first_node(N, _, Host);
+snd(Host, Id, Pl)@async :- snd(Node, Id, Pl), pipeline(Node, _, Node, Host);
+ack(Sender, Id)@async :- snd(Node, Id, _), pipeline(Node, _, Sender, Node);
+
+xfer(N, I, P)@next :- xfer(N, I, P), notin ack(N, I);
+
+ack(N, I)@next :- ack(N, I);
+data(H, I, P) :- snd(H, I, P);
+
+data(H,I,P)@next :- data(H,I,P);
+
+watch("namenode", D) :- datanode("namenode", D, _);
+
+
+// per haryadi et al, now form a pipeline that simply excludes the failed node:
+
+dead_pipe(H, I) :- pipeline(H, I, _, N), failed(H, N);
+dead_pipe(H, I) :- pipeline(H, I, N, _), failed(H, N);
+
+//pipeline(H, I + 1, F, N) :- pipeline(H, I, F, N), notin failed(H, F), notin failed(H, N), dead_pipe(H, I);
+//pipeline(H, I + 1, F, Next) :- pipeline(H, I, F, N), failed(H, N), pipeline(H, I, N, Next);
+
+
+// busted
+//pipeline(H, I + 1, F, N)@next :- pipeline(H, I, F, N), dead_pipe(H, I);
+
+// busted 2 (looks like it could be right)
+//pipeline(H, I + 1, F, N) :- pipeline(H, I, F, N), notin failed(H, F), notin failed(H, N), dead_pipe(H, I);
+//pipeline(H, I + 1, F, Next) :- pipeline(H, I, F, N), failed(H, N), pipeline(H, I, N, Next);
+
+
+
+
+
+datanode("namenode", "d1", 1)@1;
+datanode("namenode", "d2", 2)@1;
+datanode("namenode", "d3", 3)@1;
+//datanode("namenode", "d4", 4)@1;
+
+xfer("namenode", 1, "data1")@1;
+xfer("namenode", 2, "data2")@2;
+xfer("namenode", 3, "data3")@3;
+
+pipeline("namenode", 1, "d1", "d2")@1;
+pipeline("namenode", 1, "d2", "d3")@1;
+
+
+//dead("namenode", 3)@4;
+
+
+good(H, I) :- data(H, I, _);
+ever_xfer(N, I, D) :- xfer(N, I, D);
+ever_xfer(N, I, D)@next :- ever_xfer(N, I, D);
+good(H, I) :- ever_xfer(N, I, _), datanode(N, H, _), crash(_, N, _);
+

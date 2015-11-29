@@ -42,3 +42,42 @@ Molly will find a counterexample.  The `./output` directory will contain an HTML
 
 - Safari users: just open `index.html`
 - Chrome / Firefox users: due to these browsers' same-origin policies, you need to start up a local web server to host the resources loaded by this page.  Just run `python -m SimpleHTTPServer` in the output directory, then browse to the local address that it prints.
+
+
+#### Programs
+
+Programs are submitted in the Dedalus language.  Dedalus is a distributed variant of Datalog: program statements are if-then rules of the forms:
+
+     conclusion(bindings1)[@annotation] :- premise1(bindings2), premise2(bindings2) [...], notin premisen(bindings3), [...];
+     
+The conclusions and premises are relations; any variables in the conclusion (bindings1) must be bound in the body.  
+Premises may be positive or negative; if the latter, they are preceded by "notin" and all variables (bindings3) must be bound
+in positive premises.
+
+Conclusions can have temporal annotations of the following forms:
+
+ * @next -- the conclusions hold at the *successor* time.
+ * @async -- the conclusions hold at an undefined time.
+ * (no annotation) -- the conclusions hold whenever the premises hold.
+ 
+The first attribute of every relation is a *location specifier* indicating the identity of a network endpoint.
+
+The first two rules in simplog.ded are *persistence rules*.  They ensure that the contents of log and nodes persist over time:
+
+     node(Node, Neighbor)@next :- node(Node, Neighbor);
+     log(Node, Pload)@next :- log(Node, Pload);
+
+The next rule says that for every pair of records in bcast and node that agree in their first column, there should (at some
+unknown time) be a record in log that takes its first column from the second column of the node record, and its second column
+from the second column of the bcast record.  Intuitively, this captures multicast communication: when some Node1 has a bcast record, for
+every Node2 about which it knows, it forwards the payload of that record to Node2.
+
+     log(Node2, Pload)@async :- bcast(Node1, Pload), node(Node1, Node2);
+
+
+Finally, the last line says that any node that receives a broadcast should put it in its log:
+
+     log(Node, Pload) :- bcast(Node, Pload);
+
+#### Specifications
+

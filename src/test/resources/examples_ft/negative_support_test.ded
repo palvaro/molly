@@ -1,0 +1,6 @@
+snd(A, B)@async :- begin(B, A);
+snd(A,B)@next :- snd(A,B);
+bad(B, A) :- begin(B, A)@1, notin snd(A, B);
+good(B, A) :- begin(B, A)@1, notin bad(B, A);
+
+begin("b", "a")@1;

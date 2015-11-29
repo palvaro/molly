@@ -1,0 +1,16 @@
+dead_after(A, O) :- crash(A, O, N), tic(A, O, M), M > N;
+// either it really died, and we really caught it
+good(A, O) :- watch_log(A, O), failed(A, O), dead_after(A, O);
+
+// or 
+good(A, O) :- watch_log(A, O), notin failed(A, O);
+
+
+// we'd like to say: 
+// (1) There is a time after which every process that crashes is always suspected by some correct process.
+// (2) There is a time after which some correct process is never suspected by any correct process.
+
+
+
+watch("a", "b")@1;
+watch("a","c")@1;

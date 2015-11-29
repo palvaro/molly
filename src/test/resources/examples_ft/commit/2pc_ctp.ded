@@ -1,0 +1,25 @@
+include "2pc_timeout.ded";
+include "../util/timeout_svc.ded";
+
+timer_svc(Agent, Xact, 4) :- prepare(Agent, _, Xact), can(Agent, Xact);
+
+known(Agent, Xact, "C") :- commit(Agent, Xact);
+known(Agent, Xact, "A") :- abort(Agent, Xact);
+
+decision_req(Other, Agent, Xact)@async :- timeout(Agent, Xact), agent(Agent, Other), notin known(Agent, Xact, _);
+// 1. q has already decided Commit (or Abort): q simply sends a COMMIT (or ABORT) to p, and p decides accordingly,
+commit(Requestor, Xact)@async :- decision_req(Agent, Requestor, Xact), commit(Agent, Xact);
+abort(Requestor, Xact)@async :- decision_req(Agent, Requestor, Xact), abort(Agent, Xact);
+
+// 2. q has not voted yet: q can unilaterally decide Abort. It then sends an ABORT to p, and p therefore decides Abort.
+
+gotta_abort(Agent, Requestor, Xact) :- decision_req(Agent, Requestor, Xact), notin prepared(Agent, _, Xact, _);
+abort(Agent, Xact) :- gotta_abort(Agent, _, Xact);
+
+// 3. q has voted Yes but has not yet reached a decision: q is also uncertain and therefore cannot help p reach a decision.
+// (do nothing...)  but remember the case where q voted no:
+abort(Requestor, Xact)@async :- decision_req(Agent, Requestor, Xact), prepared(Agent, _, Xact, "N");
+
+agent("a", "C")@1;
+agent("b", "C")@1;
+agent("d", "C")@1;

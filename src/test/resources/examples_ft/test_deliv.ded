@@ -1,0 +1,28 @@
+
+
+node(Node, Neighbor)@next :- node(Node, Neighbor);
+log(Node, Pload)@next :- log(Node, Pload);
+
+log(Node2, Pload)@async :- bcast(Node1, Pload), node(Node1, Node2);
+log(Node, Pload) :- bcast(Node, Pload);
+
+// persist bcast; sender retries.  should accomodate all failures
+bcast(N, P)@next :- bcast(N, P);
+
+
+
+node("a","a")@1;
+node("b","a")@1;
+node("c","a")@1;
+node("a","b")@1;
+node("b","b")@1; 
+node("c","b")@1;
+node("a","c")@1; 
+node("b","c")@1;
+node("c","c")@1;
+bcast("a", "nonce1")@1;
+bcast("b", "nonce2")@1;
+bcast("c", "nonce3")@1;
+
+good(N, P) :- log(N, P);
+bad(N, P) :- log(N1, P), node(N1, N), notin log(N, P);

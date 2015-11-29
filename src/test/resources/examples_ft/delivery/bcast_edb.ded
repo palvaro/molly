@@ -1,0 +1,8 @@
+node("a", "b")@1;
+node("a", "c")@1;
+node("b", "a")@1;
+node("b", "c")@1;
+node("c", "a")@1;
+node("c", "b")@1;
+
+bcast("a", "hello")@1;

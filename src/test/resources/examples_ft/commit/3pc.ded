@@ -1,0 +1,85 @@
+include "../util/timeout_svc.ded";
+
+cancommit(Agent, Coord, Xact)@async :- begin(Coord, Xact), agent(Coord, Agent);
+vote_msg(Coord, Agent, Xact, "Y")@async :- cancommit(Agent, Coord, Xact), can(Agent, Xact);
+vote(C,A,X,S) :- vote_msg(C,A,X,S);
+
+timer_svc(A, X, 4) :- cancommit(A, _, X);
+
+// the coordinator is the distinguished node that is not an agent...
+abort(A, X)@next :- timeout(A, X), notin coordinator(A, A), notin precommitted(A, _, X), notin commit(A, X);
+
+
+authorized(C, X) :- vote_msg(C, _, X, "Y"), notin missing_vote(C, X), notin abort(C, X);
+
+precommit(A, C, X)@async :- authorized(C, X), agent(C, A);
+ack(C, A, X)@async :- precommit(A, C, X), prepared(A, C, X, "Y");
+timer_cancel(A, X) :- precommit(A, _, X), prepared(A, _, X, "Y");
+timer_svc(A, X, 4) :- precommit(A, C, X), prepared(A, C, X, "Y");
+
+//commit(A, X)@next :- timeout(A, X), precommitted(A, C, X), notin abort(A, X);
+commit(A, X) :- timeout(A, X), precommitted(A, C, X), notin abort(A, X);
+
+precommitted(A, C, X) :- precommit(A, C, X);
+precommitted(A, C, X)@next :- precommitted(A, C, X);
+
+abort(C, X)@next :- vote(C, _, X, "N");
+commit(C, X)@next :- ack(C, _, X), notin missing_ack(C, X), notin abort(C, X);
+
+missing_ack(C, X) :- agent(C, A), running(C, X), notin ack(C, A, X);
+missing_vote(C, X) :- agent(C, A), running(C, X), notin vote(C, A, X, "Y");
+
+prepared(A, C, X, "Y") :- cancommit(A,C,X), can(A,X);
+prepared(A, C, X, Y)@next :- prepared(A,C,X,Y);
+
+
+timer_svc(C, X, 5) :- begin(C, X);
+abort(C, X)@next :- timeout(C, X), coordinator(C, C), missing_ack(C, X), notin commit(C, X);
+
+
+commit(A, X)@async :- commit(C, X), agent(C, A), notin abort(C, A);
+abort(A, X)@async :- abort(C, X), agent(C, A);
+
+
+gotcommit(C, A, X)@async :- commit(A, X), precommitted(A, C, X);
+
+
+
+
+// persistence
+agent(C, A)@next :- agent(C, A);
+can(A, X)@next :- can(A, X);
+abort(A, X)@next :- abort(A, X);
+commit(A, X)@next :- commit(A, X), notin abort(A,X);
+vote(C, A, X, S)@next :- vote(C, A, X, S);
+running(Coord, Xact) :- begin(Coord, Xact);
+running(C, X)@next :- running(C, X), notin commit(C, X), notin abort(C, X);
+
+
+agent("C", "a")@1;
+agent("C", "b")@1;
+agent("C", "d")@1;
+agent("a", "b")@1;
+agent("a", "d")@1;
+agent("b", "a")@1;
+agent("b", "d")@1;
+agent("d", "a")@1;
+agent("d", "b")@1;
+
+coordinator(A, C)@next :- coordinator(A, C);
+
+coordinator("a", "C")@1;
+coordinator("b", "C")@1;
+coordinator("d", "C")@1;
+coordinator("C", "C")@1;
+
+
+
+// both agents can commit
+can("a", "hello")@1;
+can("b", "hello")@1;
+can("d", "hello")@1;
+
+begin("C", "hello")@1;
+
+

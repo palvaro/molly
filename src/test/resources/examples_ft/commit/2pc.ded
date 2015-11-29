@@ -1,0 +1,27 @@
+include "./2pc_edb.ded";
+
+// coordinator logic
+//prepare(Agent, Coord, Xact)@async :- begin(Coord, Xact), agent(Coord, Agent);
+prepare(Agent, Coord, Xact)@async :- running(Coord, Xact), agent(Coord, Agent);
+abort(C, X)@next :- vote(C, _, X, "N");
+commit(C, X)@next :- vote(C, _, X, "Y"), notin missing_vote(C, X);
+missing_vote(C, X) :- agent(C, A), running(C, X), notin vote(C, A, X, "Y");
+running(Coord, Xact) :- begin(Coord, Xact);
+running(C, X)@next :- running(C, X), notin commit(C, X), notin abort(C, X);
+commit(A, X)@async :- commit(C, X), agent(C, A);
+abort(A, X)@async :- abort(C, X), agent(C, A);
+
+// agent logic
+vote(Coord, Agent, Xact, "Y")@async :- prepare(Agent, Coord, Xact), can(Agent, Xact);
+prepared(A, C, X, "Y") :- prepare(A,C,X), can(A,X);
+
+// frame rules
+agent(C, A)@next :- agent(C, A);
+can(A, X)@next :- can(A, X);
+abort(C, X)@next :- abort(C, X);
+commit(C, X)@next :- commit(C, X);
+vote(C, A, X, S)@next :- vote(C, A, X, S);
+prepared(C,A,X,Y)@next :- prepared(C,A,X,Y);
+
+
+

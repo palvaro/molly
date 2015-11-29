@@ -1,0 +1,71 @@
+node("C", "a")@1;
+node("C", "b")@1;
+node("C", "c")@1;
+node("C", "d")@1;
+node("C", "C")@1;
+node("C", "C2")@1;
+
+
+cli_num(H, C, N)@next :- cli_num(H, C, N);
+cli_num("a", "C", 1)@1;
+cli_num("a", "C2", 2)@1;
+cli_num("b", "C", 1)@1;
+cli_num("b", "C2", 2)@1;
+cli_num("c", "C", 1)@1;
+cli_num("c", "C2", 2)@1;
+cli_num("d", "C", 1)@1;
+cli_num("d", "C2", 2)@1;
+cli_num("C", "C", 1)@1;
+cli_num("C", "C2", 2)@1;
+cli_num("C2", "C", 1)@1;
+cli_num("C2", "C2", 2)@1;
+
+
+// fake junk
+lencoding(Host, Group, Server)@next :- lencoding(Host, Group, Server);
+lencoding(Host, Group, Server) :- encoding(D, Group, Server), node(D, Host);
+
+
+encoding("C", "a|b|c|d", "a")@1;
+encoding("C", "a|b|c|d", "b")@1;
+encoding("C", "a|b|c|d", "c")@1;
+encoding("C", "a|b|c|d", "d")@1;
+
+encoding("C", "a|b|c", "a")@1;
+encoding("C", "a|b|c", "b")@1;
+encoding("C", "a|b|c", "c")@1;
+
+encoding("C", "a|b|d", "a")@1;
+encoding("C", "a|b|d", "b")@1;
+encoding("C", "a|b|d", "d")@1;
+
+encoding("C", "a|c|d", "a")@1;
+encoding("C", "a|c|d", "c")@1;
+encoding("C", "a|c|d", "d")@1;
+
+encoding("C", "b|c|d", "b")@1;
+encoding("C", "b|c|d", "c")@1;
+encoding("C", "b|c|d", "d")@1;
+
+encoding("C", "a|b", "a")@1;
+encoding("C", "a|b", "b")@1;
+
+encoding("C", "a|c", "a")@1;
+encoding("C", "a|c", "c")@1;
+
+encoding("C", "a|d", "a")@1;
+encoding("C", "a|d", "d")@1;
+
+encoding("C", "b|c", "b")@1;
+encoding("C", "b|c", "c")@1;
+
+encoding("C", "b|d", "b")@1;
+encoding("C", "b|d", "d")@1;
+
+encoding("C", "c|d", "c")@1;
+encoding("C", "c|d", "d")@1;
+
+encoding("C", "a", "a")@1;
+encoding("C", "b", "b")@1;
+encoding("C", "c", "c")@1;
+encoding("C", "d", "d")@1;

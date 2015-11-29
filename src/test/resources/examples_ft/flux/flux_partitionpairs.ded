@@ -1,0 +1,103 @@
+include "flux.ded";
+
+// ingress is dual
+conn("fpp", "fcp", "SEND")@1;
+conn("fpp", "fcs", "ACK")@1;
+status("fpp", "fcp", "ACTIVE")@1;
+status("fpp", "fcs", "ACTIVE")@1;
+del("fpp", "PRIM|SEC")@1;
+dest("fpp", "fcp")@1;
+
+conn("fps", "fcs", "SEND")@1;
+conn("fps", "fcp", "ACK")@1;
+status("fps", "fcs", "ACTIVE")@1;
+status("fps", "fcp", "ACTIVE")@1;
+del("fps", "PRIM|SEC")@1;
+dest("fps", "fcs")@1;
+
+
+conn("fcp", "fps", "SEND")@1;
+//conn("fcp", "fcp", "ACK")@1;
+status("fcp", "fps", "ACTIVE")@1;
+del("fcp", "PRIM|SEC")@1;
+dest("fcp", "fps")@1;
+
+
+conn("fcs", "fpp", "SEND")@1;
+//conn("fcp", "fcp", "ACK")@1;
+status("fcs", "fpp", "ACTIVE")@1;
+del("fcs", "PRIM|SEC")@1;
+dest("fcs", "fpp")@1;
+
+
+
+
+
+
+
+
+
+
+//other("e", "pc", "sc")@1;
+//other("e", "sc", "pc")@1;
+//other("i", "sc", "pc")@1;
+//other("i", "pc", "sc")@1;
+
+other("fpp", "fpp", "fps")@1;
+other("fpp", "fps", "fpp")@1;
+other("fpp", "fcp", "fcs")@1;
+other("fpp", "fcs", "fcp")@1;
+
+
+other("fps", "fpp", "fps")@1;
+other("fps", "fps", "fpp")@1;
+other("fps", "fcp", "fcs")@1;
+other("fps", "fcs", "fcp")@1;
+
+
+other("fcp", "fpp", "fps")@1;
+other("fcp", "fps", "fpp")@1;
+other("fcp", "fcp", "fcs")@1;
+other("fcp", "fcs", "fcp")@1;
+
+other("fcs", "fpp", "fps")@1;
+other("fcs", "fps", "fpp")@1;
+other("fcs", "fcp", "fcs")@1;
+other("fcs", "fcs", "fcp")@1;
+
+
+watch("Z", "fpp")@1;
+watch("Z", "fcp")@1;
+watch("Z", "fps")@1;
+watch("Z", "fcs")@1;
+member("Z", "fpp")@1;
+member("Z", "fps")@1;
+member("Z", "fcp")@1;
+member("Z", "fcs")@1;
+// just once tho
+
+put("fpp", "foo", 1, 0)@1;
+put("fpp", "bar", 2, 0)@1;
+put("fpp", "baz", 3, 0)@1;
+put("fpp", "qux", 4, 0)@2;
+
+put("fps", "foo", 1, 0)@1;
+put("fps", "bar", 2, 0)@1;
+put("fps", "baz", 3, 0)@1;
+put("fps", "qux", 4, 0)@2;
+
+consumer("fcs")@1;
+consumer("fcp")@1;
+consumer(X)@next :- consumer(X);
+
+put_log(E, X, I) :- put(E, X, I, _), consumer(E);
+put_log(E, X, I)@next :- put_log(E, X, I);
+good(X, I) :- put_log(E, X, I);
+
+// trivially, anything goes if e or i crash
+//good(X, I) :- put_log(_, X, I), crash(_, "i", _);
+//good(X, I) :- put_log(A, X, I), crash(A, "e", _);
+
+pre(X) :- put(_, X, _, _)@1;
+post(X) :- good(X, I);
+

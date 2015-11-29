@@ -1,0 +1,14 @@
+getit(Host, Sender, Msg)@async :- sendit(Sender, Host, Msg);
+good(H, M) :- getit(H, _, M);
+good(H, M)@next :- good(H, M);
+
+gotit(S, M) :- getit(Host, _, M), everyone(Host, S);
+
+
+everyone("b", "c")@1;
+everyone("c", "b")@1;
+
+sendit("a", "b", "Hi!")@1;
+
+
+

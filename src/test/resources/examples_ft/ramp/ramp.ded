@@ -1,0 +1,91 @@
+// RAMPFast
+// we'll ignore the complexity of key-node mappings by making keys and node identical;
+// each node hosts a single key
+
+include "encoding.ded";
+include "sequence.ded";
+include "ramp_assert.ded";
+include "ramp_edb.ded";
+
+
+// client logic
+
+do_prepare(Cli, Keys, Val, Server, Ts) :- write(Cli, Keys, Val), lencoding(Cli, Keys, Server), seq(Cli, "Main", Ts);
+prepare(Server, Keys, Val, Timestamp, Cli)@async :- do_prepare(Cli, Keys, Val, Server, Timestamp);
+seq_bump(Cli, "Main") :- do_prepare(Cli, _, _, _, _);
+
+begin(Cli, Val, Keys, Server, Ts) :- do_prepare(Cli, Keys, Val, Server, Ts);
+begin(Cli, Val, Keys, Server, Ts)@next :- begin(Cli, Val, Keys, Server, Ts), notin commit_ack(Cli, Server, Ts);
+//outstanding(Cli, Val, Server, Ts)@next :- do_prepare(Cli, _, Val, Server, Ts);
+outstanding(Cli, Val, Server, Ts) :- begin(Cli, Val, _, Server, Ts), notin prepare_ok(Cli, Server, Ts);
+
+ready(Cli, Ts)@next :- begin(Cli, Val, _, Server, Ts), notin outstanding(Cli, _, _, Ts);
+commit(Server, Cli, Timestamp)@async :- ready(Cli, Ts), begin(Cli, _, _, Server, Timestamp);
+
+begin_read(Cli, Keys) :- read(Cli, Keys);
+begin_read(C, K)@next :- begin_read(C, K);
+
+need(Cli, Server, "none", 0) :- read(Cli, Keys), lencoding(Cli, Keys, Server);
+get(Server, Cli, C2, Ts)@async :- need(Cli, Server, C2, Ts);
+has_need(C, S, C2, Ts) :- need(C,S,C2,Ts);
+has_need(C, S, C2, Ts)@next :- has_need(C,S,C2,Ts), notin responses(C, S, _, _, _,_);
+
+
+responses(Cli, Server, Keys, Val, Cli2, Ts) :- get_resp(Cli, Server, Keys, Val, Cli2, Ts);
+responses(C, S, K, V, C2, Ts)@next :- responses(C, S, K, V, C2, Ts);
+
+associated_keys(Cli, Server, S2) :- responses(Cli, Server, Keys, _, _, _), lencoding(Cli, Keys, S2);
+
+
+// interpret: the value you read at server Server was superceded by ts <Cli2, Ts>
+superceded(Cli, S2, Cli2, Ts) :- responses(Cli, Server, _, _, Cli2, Ts), responses(Cli, S2, _, _, C3, Ts2),
+                                 associated_keys(Cli, S2, Server),
+                                 notin has_need(Cli, _, _, _),
+                                 Ts > Ts2;
+
+superceded(Cli, S2, Cli2, Ts) :- responses(Cli, Server, _, _, Cli2, Ts), responses(Cli, S2, _, _, C3, Ts),
+                                 notin has_need(Cli, _, _, _),
+                                 associated_keys(Cli, S2, Server),
+                                 cli_num(Cli, Cli2, Id2), cli_num(Cli, C3, Id3),
+                                 Id2 > Id3;
+
+
+
+//get(Server, Cli, C2, Ts)@async :- begin_read(Cli, Keys), lencoding(Cli, Keys, Server), superceded(Cli, Server, C2, Ts);
+need(Cli, Server, C2, Ts)@next :- begin_read(Cli, Keys), lencoding(Cli, Keys, Server), superceded(Cli, Server, C2, Ts);
+//need(Cli, Server, C2, Ts)@async :- begin_read(Cli, Keys), lencoding(Cli, Keys, Server), superceded(Cli, Server, C2, Ts);
+
+
+//unsat(Cli,
+/// blocking read for all keys
+read_response(Cli, Server, Keys, Val, C2, Ts) :- responses(Cli, Server, Keys, Val, C2, Ts), notin has_need(Cli, _, _, _);
+
+//begin_read(Cli, Keys), lencoding(Cli , Keys, Server), get_resp(Cli, Server, Val, Cli2, Ts)
+
+// server logic
+
+prepare_ok(Cli, Server, Timestamp)@async :- prepare(Server, _, _, Timestamp, Cli);
+
+versions(Server, Cli, Keys, Timestamp, Val) :- prepare(Server, Keys, Val, Timestamp, Cli);
+versions(S, C, K, T, V)@next :- versions(S, C, K, T, V);
+
+
+//do_commit(Server, Cli, Timestamp) :- commit(Server, Cli, Timestamp), notin commit(Server, Cli2, Ts2), Cli != Cli2;
+commit_ack(Cli, Server, Ts)@async :- commit(Server, Cli, Ts);
+commit_log(Server, Cli, Timestamp) :- commit(Server, Cli, Timestamp);
+commit_log(Server, Cli, Timestamp)@next :- commit_log(Server, Cli, Timestamp);
+
+highest_timestamp(Server, max<Timestamp>) :- commit_log(Server, _, Timestamp);
+winner(Server, max<Id>, Ts) :- highest_timestamp(Server, Ts), commit_log(Server, Cli, Ts), cli_num(Server, Cli, Id);
+last_commit(Server, Cli, Keys, Ts, Val) :- winner(Server, Id, Ts), cli_num(Server, Cli, Id), versions(Server, Cli, Keys, Ts, Val);
+
+get_resp(Cli, Server, Keys, Val, Cli2, Ts)@async :- get(Server, Cli, "none", 0), last_commit(Server, Cli2, Keys, Ts, Val);
+get_resp(Cli, Server, Keys, Val, C2, Ts)@async :- get(Server, Cli, C2, Ts), //commit_log(Server, C2, Ts),
+    versions(Server, C2, Keys, Ts, Val);
+
+
+
+
+
+
+

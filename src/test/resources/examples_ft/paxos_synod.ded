@@ -1,0 +1,82 @@
+// proposer
+
+
+include "util/timeout_svc.ded";
+timer_svc(A, M, 3) :- proposal(A, M);
+
+
+nodes(A, N, I)@next :- nodes(A, N, I);
+seed(A, S)@next :- seed(A, S), notin update_seed(A);
+seed(A, S+C)@next :- seed(A, S), update_seed(A), agent_cnt(A, C);
+
+prepare(B, A, S, M)@async :- proposal(A, M), seed(A, S), nodes(A, B, _);
+update_seed(A) :- proposal(A, _);
+
+redo(A, M) :- timeout(A, M), notin accepted(A, _, M);
+prepare(B, A, S, M)@async :- redo(A, M), seed(A, S), nodes(A, B, _);
+timer_svc(A,M,3) :- redo(A, M);
+update_seed(A) :- redo(A, M);
+
+response_log(C, A, S, O, Os) :- prepare_response(C, A, S, O, Os);
+response_log(C, A, S, O, M)@next :- response_log(C, A, S, O, M);
+
+// workaround for the fact that c4 can't count strings!
+//response_cnt(C, S, count<A>) :- response_log(C, A, S, O, Os);
+response_cnt(C, S, count<I>) :- response_log(C, A, S, O, Os), nodes(C, A, I);
+
+best(C, S, max<Os>) :- response_log(C, A, S, O, Os);
+what(C, I) :- nodes(C, _, I);
+//agent_cnt(C, count<I>) :- nodes(C, _, I);
+agent_cnt(C, count<I>) :- what(C, I);
+
+accept(A, S, O)@async :- agent_cnt(C, Cnt1), response_cnt(C, S, Cnt2), response_log(C, _, S, O, Os), best(C, S, Os), nodes(C, A, _), Os != 1, Cnt2 > Cnt1 / 2;
+accept(A, S, P)@async :- agent_cnt(C, Cnt1), response_cnt(C, S, Cnt2), response_log(C, _, S, O, Os), best(C, S, Os), my_proposal(C, P), nodes(C, A, _), Os == 1, Cnt2 > Cnt1 / 2;
+
+
+// acceptor
+dominated(A, S) :- prepare(A, _, S, _), prepare_log(A, S2, _), S2 > S;
+can_respond(A, C, S, M) :- prepare(A, C, S, M), notin dominated(A, S);
+prepare_response(C, A, S, O, Os)@async :- can_respond(A, C, S, M), accepted(A, Os, O), highest_accepted(A, Os);
+prepare_response(C, A, S, "anything", 1)@async :- can_respond(A, C, S, M), notin accepted(A, _, _);
+
+
+highest_accepted(A, max<S>) :- accepted(A, S, _);
+accepted(A, S, M) :- accept(A, S, M);
+accepted(A, S, M)@next :- accepted(A, S, M);
+
+
+prepare_log(A, S, M) :- prepare(A, _, S, M);
+prepare_log(A, S, M)@next :- prepare_log(A, S, M);
+
+
+my_proposal(A, P) :- proposal(A, P);
+my_proposal(A, P)@next :- my_proposal(A, P);
+
+//good(C, S, M) :- accepted(C, S, M);
+
+important(A, M) :- accepted(A, _, M), notin crash(A, A, _);
+
+pre(M) :- important(_, M);
+disagree(M) :- important(_, M), important(_, N), M != N;
+post(M) :- important(_, M), notin disagree(M);
+
+bad(A) :- important(A, "peter"), important(_, "foobar");
+good("yay") :- important(A,M), notin bad(A);
+
+/// EDB
+
+proposal("a", "peter")@1;
+proposal("b", "foobar")@1;
+
+seed("a", 4)@1;
+seed("b", 5)@1;
+seed("c", 6)@1;
+nodes("a", "b", 2)@1;
+nodes("a", "c", 3)@1;
+nodes("b", "a", 1)@1;
+nodes("b", "c", 3)@1;
+nodes("c", "a", 1)@1;
+nodes("c", "b", 2)@1;
+nodes("a", "a", 1)@1;
+nodes("b", "b", 2)@1;
+nodes("c", "c", 3)@1;

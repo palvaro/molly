@@ -1,0 +1,81 @@
+include "flux.ded";
+
+// ingress is dual
+conn("i", "pc", "SEND")@1;
+conn("i", "sc", "SEND")@1;
+conn("i", "pc", "ACK")@1;
+conn("i", "sc", "ACK")@1;
+status("i", "pc", "ACTIVE")@1;
+status("i", "sc", "ACTIVE")@1;
+del("i", "PRIM|SEC")@1;
+dest("i", "pc")@1;
+dest("i", "sc")@1;
+
+// the primary just forwards data and ACKs.
+conn("pc", "e", "SEND")@1;
+status("pc", "e", "ACTIVE")@1;
+status("pc", "i", "ACTIVE")@1;
+dest("pc", "e")@1;
+//dest("pc", "i")@1;
+conn("pc", "i", "SEND")@1;
+
+// the secondary just processes ACKs
+conn("sc", "e", "ACK")@1;
+status("sc", "e", "ACTIVE")@1;
+status("sc", "i", "ACTIVE")@1;
+dest("sc", "e")@1;
+
+// egress sends ACKs to the secondary
+conn("e", "sc", "ACK")@1;
+conn("e", "sc", "SEND")@1;
+status("e", "sc", "ACTIVE")@1;
+dest("e", "sc")@1;
+conn("e", "pc", "RECV")@1;
+
+//conn("sc", "i", "SEND")@1;
+//dest("sc", "i")@1;
+
+
+other("e", "pc", "sc")@1;
+other("e", "sc", "pc")@1;
+other("i", "sc", "pc")@1;
+other("i", "pc", "sc")@1;
+
+
+watch("Z", "pc")@1;
+watch("Z", "sc")@1;
+member("Z", "i")@1;
+member("Z", "e")@1;
+member("Z", "pc")@1;
+member("Z", "sc")@1;
+// just once tho
+
+put("i", "foo", 1, 0)@1;
+put("i", "bar", 2, 0)@1;
+put("i", "baz", 3, 0)@1;
+put("i", "qux", 4, 0)@2;
+
+//advance("i", "prim")@3;
+//advance("i", "prim")@4;
+
+//good(X, Y, "foo") :- dest(X, Y);
+
+//good("foo") :- put(A,B,C,D)@1;
+//good("foo")@1;
+//good(X)@next :- good(X);
+//good(X, Y) :- del(X, Y);
+
+put_log(E, X, I) :- put(E, X, I, _);
+put_log(E, X, I)@next :- put_log(E, X, I);
+good(X, I) :- put_log("e", X, I);
+
+// trivially, anything goes if e or i crash
+good(X, I) :- put_log(_, X, I), crash(_, "i", _);
+good(X, I) :- put_log(A, X, I), crash(A, "e", _);
+
+alive(M, X) :- member(_, M), put_log(M, X, _), notin crash(_, M, _);
+both_alive(X) :- alive("i", X), alive("e", X);
+pre(X) :- alive(_, X);
+
+post(X) :- put_log("e", X, _);
+

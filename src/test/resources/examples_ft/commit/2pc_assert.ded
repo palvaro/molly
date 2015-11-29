@@ -1,0 +1,11 @@
+// raise if we never decide
+
+pre("termination", X) :- prepared(_, _, X, _);
+post("termination", X) :- decision(A1, X, _), decision(A2, X, _), A1 != A2;
+
+decision(C, X, "c") :- commit(C, X);
+decision(C, X, "a") :- abort(C, X);
+disagree(X) :- decision(_, X, V1), decision(_, X, V2), V1 != V2;
+pre("decide",  X) :- decision(_, X, _);
+post("decide", X) :- decision(_, X, V), notin disagree(X);
+

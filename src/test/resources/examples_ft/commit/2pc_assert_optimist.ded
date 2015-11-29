@@ -1,0 +1,10 @@
+include "2pc_assert.ded";
+
+// anything goes when the coordinator goes
+
+good(A, X) :- begin(A, X)@1, crash(A, A, _);
+good(B, X) :- begin(A, X)@1, crash(A, A, _), agent(A, B);
+
+post("termination", X) :- begin(A, X)@1, crash(A, A, _);
+
+

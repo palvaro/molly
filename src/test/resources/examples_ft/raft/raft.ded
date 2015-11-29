@@ -1,0 +1,95 @@
+include "raft_edb.ded";
+include "raft_assert.ded";
+include "election.ded";
+//include "../util/queue.ded";
+
+// need to do client retries, obvs.
+client_request(Server, Cli, Cid, Req)@async :- new_request(Cli, Server, Cid, Req);
+client_request(Leader, Cli, Cid, Req)@async :- redirect(Cli, Server, Leader, Cid, Req);
+
+// ephemeral redirects; assume clients retry
+do_redirect(Server, Cli, Leader, Cid, Req) :- cli_req_buf(Server, Cli, Cid, Req), role(Server, "F"), leader(Server, _, Leader);
+redirect(C,S,L,I,R)@async :- do_redirect(S,C,L,I,R);
+finish(S, I) :- do_redirect(S, _, _, I, _);
+finish(S, I) :- commit(S, _, Idx), running(S, _, _, I);
+
+cli_req_buf(S,C,I,R) :- client_request(S,C,I,R);
+cli_req_buf(S,C,I,R)@next :- cli_req_buf(S,C,I,R), notin finish(S, I);
+buf_bot(S, min<I>) :- cli_req_buf(S, _, I, _);
+
+dispatch(S, T, R, I)@next :- cli_req_buf(S, C, I, R), current_term(S, T), role(S, "L"), buf_bot(S, I), notin running(S, _, _, _), notin log(S, _, _, _, R);
+running(S, T, R, I)@next :- dispatch(S, T, R, I);
+running(S, T, R, I)@next :- running(S, T, R, I), notin finish(S, I);
+
+
+real_append_entries(N,T,L,I,P,R,C) :- append_entries(N,T,L,I,P,R,C), R != "NOOP";
+
+problem(Node, Term, Idx) :- real_append_entries(Node, Term, Leader, Idx, _, _, _),
+    current_term(Node, MyTerm), MyTerm > Term;
+
+problem(Node, Term, Idx) :- real_append_entries(Node, Term, Leader, Idx, PrevTerm, _, _),
+    notin log(Node, Idx, PrevTerm, _, _);
+
+append_reply(Leader, Node, Term, Idx, "false")@async :- real_append_entries(Node, Term, Leader, Idx, PrevTerm, _, _),
+    problem(Node, Term, Idx);
+
+append_reply(Leader, Node, Term, Idx, "true")@async :- real_append_entries(Node, Term, Leader, Idx, PrevTerm, _, _),
+    notin problem(Node, Term, Idx);
+
+
+
+
+ack_log(L,N,T,I) :- append_reply(L,N,T,I,"true");
+ack_log(L,N,T,I)@next :- ack_log(L,N,T,I);
+
+ack_cnt(Leader, Term, Idx, count<Nid>) :- ack_log(Leader, Node, Term, Idx), member(Leader, Node, Nid);
+//member_cnt(Leader, count<Id>) :- member(Leader, Member, Id);
+
+safe(Leader, Term, Idx + 1) :- ack_cnt(Leader, Term, Idx, Cnt1), member_cnt(Leader, Cnt2), Cnt1 > Cnt2 / 2;
+
+// the leader heartbeat
+
+ae_info(Leader, Term, PrevLogIdx, PrevLogTerm, LeaderCommit) :- role(Leader, "L"), term(Leader, Term),
+    log_indx(Leader, PrevLogIdx), log_term(Leader, PrevLogTerm), commit_indx(Leader, LeaderCommit);
+
+do_ae(Leader, Term, PrevLogIdx, Prevlogterm, LeaderCommit, "NOOP") :-
+    ae_info(Leader, Term, PrevLogIdx, Prevlogterm, LeaderCommit), notin running(Leader, Term, _, _);
+
+do_ae(Leader, Term, PrevLogIdx, Prevlogterm, LeaderCommit, Req) :-
+         ae_info(Leader, Term, PrevLogIdx, Prevlogterm, LeaderCommit), running(Leader, Term, Req, _);
+
+append_entries(Node, Term, Leader, PrevLogIdx, PrevLogTerm, Req, LeaderCommit)@async :-
+    do_ae(Leader, Term, PrevLogIdx, PrevLogTerm, LeaderCommit, Req), member(Leader, Node, _);
+
+
+append_log(Node, Term, LeaderId, Prevlogindex, PrevLogterm, Entries, Leadercommit, Rcv)@next :-
+    append_log(Node, Term, LeaderId, Prevlogindex, PrevLogterm, Entries, Leadercommit, Rcv);
+
+append_log(Node, Term, LeaderId, Prevlogindex, Prevlogterm, Entries, Leadercommit, Time) :-
+    append_entries(Node, Term, LeaderId, Prevlogindex, Prevlogterm, Entries, Leadercommit),//, term_time(Node, Term, Time),
+    lclock(Node, "Localtime", Term, Time);
+
+commit(Node, Term, Idx) :- safe(Node, Term, Idx), notin log(Node, Idx, Term, _, _);
+commit(Node, Term, Idx + 1) :- real_append_entries(Node, Term, Leader, Idx, _, _, _), notin problem(Node, Term, Idx), Node != Leader;
+
+
+
+log_indx(Node, max<Idx>) :- log(Node, Idx, _, _, _);
+log_term(Node, max<Term>) :- log(Node, _, Term, _, _);
+log(Node, Idx, Term, Leader, Entry)@next :- log(Node, Idx, Term, Leader, Entry), notin log_del(Node, Idx, Term);
+log(Node, Idx, Term, Leader, Entry)@next :- commit(Node, Term, Idx),
+    append_log(Node, Term, Leader, Prev, _, Entry, _, _),
+    Idx == Prev + 1,
+    Entry != "NOOP";
+
+
+// a stub till I figure out commit indexes
+//commit_indx(N, I) :- log_term(N, I);
+commit_indx(Node, Idx)@next :- commit_indx(Node, Idx), notin real_append_entries(Node, _, _, _, _, _, _), notin commit(Node, Term, Idx);
+//last_new_entry(Node, min<Idx>) :- append_entries(Node, _, _,
+keep(Node, Idx)@next :- commit_indx(Node, Idx),  real_append_entries(Node, _, _, OldIdx, _, _, Lc), Idx > OldIdx;
+//commit_indx(Node, Idx+1)@next :- commit_indx(Node, Idx), notin keep(Node, Idx),
+//    real_append_entries(Node, _, _, _, _, _, _), notin role(Node, "L");
+
+//commit_indx(Node, Idx+1)@next :- role(Node, "L"), commit(Node, _, Idx);
+commit_indx(Node, max<Idx>) :- commit(Node, _, Idx);

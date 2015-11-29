@@ -1,0 +1,22 @@
+include "util/timeout_svc.ded";
+
+watch_log(F, H)@next :- watch_log(F, H);
+watch_log(F, H) :- watch(F, H);
+
+timer_svc(F, 1, 3) :- watch(F, H);
+timer_svc(H, Id + 1, 3) :- timeout(H, Id);
+
+ping(H, F, 3)@async :- watch(F, H);
+ping(Host, From, Nonce + 1)@async :- watch_log(From, Host), timeout(From, Nonce);
+pong(From, Host, Nonce)@async :- ping(Host, From, Nonce);
+omission(Host, Other, Id) :- timeout(Host, Id), watch_log(Host, Other), notin pong(Host, Other, Id);
+omission_cnt(Host, Other, count<Id>) :- omission(Host, Other, Id);
+failed(Host, Other) :- omission_cnt(Host, Other, Cnt), max_tic(Host, Other, Tm), Cnt > Tm / 6;
+
+tic(F, H, 0) :- watch(F, H);
+tic(F, H, I+1)@next :- tic(F, H, I);
+
+max_tic(F, H, max<I>) :- tic(F, H, I);
+// schema hint:
+
+watch("test", "test")@1;

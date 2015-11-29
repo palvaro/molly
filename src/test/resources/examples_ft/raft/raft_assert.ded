@@ -1,0 +1,12 @@
+// a run is good if we have nontrivial log entries
+good("YAY") :- log(N, _,_,_, E), notin bad(N, _, _), E != "NOOP";
+// trivial case:
+haslog(X) :- log(X, _, _, _, E), E != "NOOP";
+good("YAY") :- member(_, X, _), notin haslog(X);
+
+
+//good("YAY") :- member(_, X, _);
+
+
+bad(N1, N2, "disagree") :- log(N1, Idx, _, _, Entry), log(N2, Idx, _, _, Entry2), Entry != Entry2, notin crash(_, N2, _), notin crash(_, N1, _);
+bad(N1, N2, "two leaders") :- leader(_, T, N1), leader(_, T, N2), N1 != N2;

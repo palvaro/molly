@@ -1,0 +1,23 @@
+//include "timeout_svc.ded";
+
+watch_state(F, H, S+1)@next :- watch_state(F, H, S);
+watch_state(F, H, 0) :- watch(F, H);
+
+hb_req(F, H)@async :- watch_state(H, F, _), notin hb_log(H, F, _);
+
+hb_state(F, H, 0)@next :- hb_req(F, H), notin hb_state(F, H, _);
+heartbeat(H, F, N)@async :- hb_state(F, H, N);
+hb_state(F, H, N+1)@next :- hb_state(F, H, N);
+
+
+hb_log(H, F, N) :- heartbeat(H, F, N);
+hb_log(H, F, N)@next :- hb_log(H, F, N);
+aggs(H, F, max<N>) :- hb_log(H, F, N);
+
+failed(H, F) :- aggs(H, F, M), watch_state(H, F, S), S > M + 3;
+
+//good(H) :- hb_log(H, _, _);
+//good(H) :- watch(A, H)@1, crash(A, A, _);
+
+//watch("a", "b")@1;
+//watch("a", "c")@1;

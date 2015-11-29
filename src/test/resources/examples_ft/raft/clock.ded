@@ -1,0 +1,5 @@
+// a simple passive logical clock.  records the # of timesteps since registration of a particular key.
+// because the pattern of multiplexing is so common, a key is a combination of a type and an identifier.
+
+lclock(Host, Type, Id, 0) :- lclock_register(Host, Type, Id);
+lclock(Host, Type, Id, Time + 1)@next :- lclock(Host, Type, Id, Time), notin lclock_unreg(Host, Id);

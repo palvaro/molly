@@ -1,0 +1,4 @@
+register(Name, Value)@next :- register(Name, Value), notin update(Name, _);
+register(Name, Value)@next :- update(Name, Value);
+
+

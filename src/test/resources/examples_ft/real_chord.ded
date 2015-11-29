@@ -1,0 +1,101 @@
+include "real_heartbeat.ded";
+
+
+f_node_mapping("a", 1)@1;
+//f_node_mapping("b", 3)@1;
+f_node_mapping("c", 4)@1;
+
+
+f_key_mapping("foo", 2)@1;
+f_key_mapping("bar", 1)@1;
+n_succ(1, 2)@1;
+n_succ(2, 3)@1;
+n_succ(3, 4)@1;
+n_succ(4,5)@1;
+n_succ(5, 1)@1;
+
+
+node("a")@1;
+node("b")@1;
+node("c")@1;
+node("d")@1;
+
+f_node_mapping("d", 5)@1;
+f_node_mapping("b", 3)@1;
+
+
+//node(X)@next :- node(X);
+f_node_mapping(H,I)@next :- f_node_mapping(H,I);
+f_key_mapping(H,I)@next :- f_key_mapping(H,I);
+
+// the hashing function is global
+node_mapping(N, H, I) :- node(N), f_node_mapping(H, I);
+key_mapping(N, H, I) :- node(N), f_key_mapping(H, I);
+logical_succ(H, X, Y) :- node(H), n_succ(X, Y);
+logical_succ(H,X,Y)@next :- logical_succ(H,X,Y);
+
+
+circumference(H, count<I>) :- logical_succ(H, I, _);
+distance(H, X, Y, 1) :- logical_succ(H, X, Y);
+distance(H, X, Y, C + 1) :- logical_succ(H, X, Z), distance(H, Z, Y, C), circumference(H, Cir), C < Cir-1;
+
+
+//logical_order(N, X, Y) :- logical_succ(N, X, Y);
+//logical_order(N, X, Y) :- logical_succ(N, X, Z), logical_order(N, Z, Y);
+
+/*
+nodes(N, count<I>) :- node_mapping(N, _, I);
+lsn(N, A, B) :- logical_succ(N, X, Y), node_mapping(N, A, X), node_mapping(N, B, Y);
+distance(N, X, Y, 1) :- lsn(N, X, Y);
+distance(N, X, Y, C + 1) :- lsn(N, X, Z), distance(N, Z, Y, C), nodes(N, Cnt), C < Cnt;
+*/
+
+
+
+
+//join("a", "a")@1;
+join("b", "a")@2;
+join("c", "a")@2;
+join("d", "a")@2;
+
+
+//successor(Host, Id, Node) :- join(Host, Id), node_mapping(Host, Node, Id);
+//successor(H, I, N)@next :- successor(H, I, N), notin succ_change(H, _, _);
+//successor(H, I, N)@next :- succ_change(H, _, _);
+
+
+succ(H, S)@next :- join(H, S), notin succ(H, _);
+succ(H, S) :- join(H, S), succ(H, S2), 
+              //node_mapping(H, S, I1), node_mapping(H, S2, I2), node_mapping(H, H, MyId),
+              //distance(H, MyId, I1, D1), distance(H, MyId, I2, D2), 
+              closeness(H, S, D1), closeness(H, S2, D2),
+              D1 < D2; 
+succ(H, S)@next :- succ(H, S), notin succ_change(H, _);
+
+closeness(H, O, D) :- distance(H, F, T, D), node_mapping(H, H, F), node_mapping(H, O, T);
+
+stabilize(S, H)@async :- succ(H, S);
+stabilized(H, S, P)@async :- stabilize(S, H), pred(S, P);
+
+
+can_stab(H, S) :- stabilize(H, S), notin pred(H, _);
+can_stab(H, S) :- stabilize(H, S), pred(H, S2),
+              node_mapping(H, S, I1), node_mapping(H, S2, I2), node_mapping(H, H, MyId),
+              distance(H, MyId, I1, D1), distance(H, MyId, I2, D2), 
+              D1 > D2;
+
+//pred_change(S, H
+
+pred(S, H)@next :- pred(S, H), notin pred_change(S, _);
+
+
+
+//good(S, H) :- pred(S, H);
+good(S, H) :- logical_succ(S, H, _);
+
+//succ("a","b")@100;
+
+//distance("a",1,1, 1)@100;
+
+succ_change("a", "z")@100;
+pred_change("a", "z")@100;

@@ -1,0 +1,5 @@
+// a simple sequence
+
+seq(Host, Key, 1) :- seq_begin(Host, Key);
+seq(Host, Key, Id + 1)@next :- seq(Host, Key, Id), seq_bump(Host, Key), notin seq_delete(Host, Key);
+seq(Host, Key, Id)@next :- seq(Host, Key, Id), notin seq_bump(Host, Key), notin seq_delete(Host, Key);

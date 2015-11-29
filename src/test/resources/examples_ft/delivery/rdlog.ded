@@ -1,0 +1,10 @@
+// reliable delivery-backed broadcast.  send messages at all neighbors 
+// a (theoretically) infinite number of times
+
+include "./bcast_edb.ded";
+include "./simplog.ded";
+
+
+// persist bcast; sender retries.  should accomodate all failures
+bcast(N, P)@next :- bcast(N, P);
+

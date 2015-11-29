@@ -1,0 +1,13 @@
+vote(M, V)@next :- vote(M, V);
+member(M, V, I)@next :- member(M, V, I);
+vote(M, V)@async :- begin(V, M);
+
+//good(M, V) :- vote(M, V);
+vote_cnt(M, count<I>) :- vote(M, V), member(M, V, I);
+good(M, I) :- vote_cnt(M, I);
+
+
+member("M", "a", 1)@1;
+member("M", "b", 2)@1;
+begin("a", "M")@1;
+begin("b", "M")@1;

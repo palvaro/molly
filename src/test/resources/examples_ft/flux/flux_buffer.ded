@@ -1,0 +1,26 @@
+// I am a buffer.  I support: put, peek, advance, ack, ack_all, and reset
+
+buf(Host, Data, Sn, Markings) :- put(Host, Data, Sn, Markings);
+
+//buf(H,D,S,M)@next :- bug(H, D, S, M), notin advance(H, D), notin reset(H, D);
+buf(H,D,S,M)@next :- buf(H, D, S, M), notin reset(H, D);
+
+acked(H, Dest, Sn, Markings) :- ack(H, Dest, Sn, Markings);
+acked(H, Dest, Sn, M)@next :- acked(H, Dest, Sn, M);
+
+
+bot(H, Dest, min<Sn>) :- buf(H, _, Sn, _), dest(H, Dest), notin advanced(H, Dest, Sn);
+advanced(H, D, Sn)@next :- advance(H, D), bot(H, D, Sn);
+advanced(H, D, S)@next :- advanced(H, D, S);
+
+
+peek(H, Dest, Sn, Data) :- bot(H, Dest, Sn), buf(H, Data, Sn, _);
+
+
+dest(H, D)@next :- dest(H, D);
+
+//good(X, D, S) :- buf(X, D, S, _);
+
+
+
+

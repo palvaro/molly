@@ -1,0 +1,6 @@
+// a reusable logical timeout service.  send a message to it with an identifier and a # of
+// transitions, and it sends you a timeout later.
+
+timer_state(H, I, T-1)@next :- timer_svc(H, I, T);
+timer_state(H, I, T-1)@next :- timer_state(H, I, T), notin timer_cancel(H, I), T > 1;
+timeout(H, I) :- timer_state(H, I, 1);

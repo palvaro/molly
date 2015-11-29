@@ -1,0 +1,59 @@
+dispatch("z", 0, "fug", 0)@100;
+commit_indx("z", 0)@100;
+
+
+log_term("z", 0)@100;
+role("z", "foo")@100;
+term("z", 0)@100;
+
+
+// edb; move later
+
+role("a", "C")@1;
+role("b", "C")@1;
+role("c", "C")@1;
+
+stall("a", 0)@1;
+stall("b", 0)@1;
+stall("c", 0)@1;
+
+term("a", 0)@1;
+term("b", 0)@1;
+term("c", 0)@1;
+
+log_indx("a", 0)@1;
+log_indx("b", 0)@1;
+log_indx("c", 0)@1;
+
+member("a", "b", 2)@1;
+member("a", "c", 3)@1;
+member("a", "a", 1)@1;
+member("b", "c", 3)@1;
+member("b", "a", 1)@1;
+member("b", "b", 2)@1;
+member("c", "b", 2)@1;
+member("c", "a", 1)@1;
+member("c", "c", 3)@1;
+
+log("a", 0, 0, "z", "NOOP")@1;
+log("b", 0, 0, "z", "NOOP")@1;
+log("c", 0, 0, "z", "NOOP")@1;
+
+rank("a", "F", 1)@1;
+rank("a", "C", 2)@1;
+rank("a", "L", 3)@1;
+rank("b", "F", 1)@1;
+rank("b", "C", 2)@1;
+rank("b", "L", 3)@1;
+rank("c", "F", 1)@1;
+rank("c", "C", 2)@1;
+rank("c", "L", 3)@1;
+rank(N, O, I)@next :- rank(N, O, I);
+
+commit_indx("a", 0)@1;
+commit_indx("b", 0)@1;
+commit_indx("c", 0)@1;
+
+new_request("C", "b", 100, "foo")@1;
+new_request("C", "a", 200, "bar")@1;
+new_request("C", "c", 300, "baz")@1;

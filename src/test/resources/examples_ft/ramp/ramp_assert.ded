@@ -1,0 +1,24 @@
+// assertions
+
+//bad_read() :- responses(Cli, Server1, Keys, Val1, Cli2, Ts), responses(Cli, Server2, Keys, Val2, Cli2, Ts)
+
+read_disagree(Cli, Server) :- responses(Cli, Server, _, X, _, _), responses(Cli2, Server, _, Y, _, _), X != Y;
+good(Server) :- responses(Cli, Server, Keys, Val, C2, Ts), notin read_disagree(Cli, Server);
+
+//good(Server) :- begin_read(Cli, Keys), lencoding(Cli, Keys, Server), notin responses(Cli, Server, _, _, _, _);
+// if there is at least one client and at least one server up, there is a response.
+all_cli_down("X") :- crash(_, "C", _), crash(_, "C2" ,_);
+//all_srv_down("X") :- crash(_, "a", _), crash(_, "b", _), crash(_, "c", _);
+srv_down(Server) :- begin_read(Cli, Keys), lencoding(Cli, Keys, Server), crash(_, Server, _);
+uncommitted(Server) :- begin_read(Cli, Keys), lencoding(Cli, Keys, Server), notin commit_log(Server, _, _);
+
+//never_requested(Server) :- begin_read(Cli, Keys), lencoding(Cli, Keys, Server)
+good(Server) :- begin_read(Cli, Keys), lencoding(Cli, Keys, Server), all_cli_down(_);
+good(Server) :- srv_down(Server);
+good(Server) :- uncommitted(Server);
+
+
+//good("YAY") :- last_commit("a", _, _, "foo"), last_commit("b", _, _, "foo"), last_commit("c", _, _, "foo");
+//good("YAY") :- last_commit("a", _, _, "foo"), last_commit("b", _, _, "foo"), last_commit("c", _, _, "foo");
+
+// how should I write down the atomic visibility assertion?

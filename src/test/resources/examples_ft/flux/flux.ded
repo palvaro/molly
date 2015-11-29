@@ -1,0 +1,47 @@
+include "flux_buffer.ded";
+include "../real_heartbeat.ded";
+
+// producer specification
+
+dispatch(Host, Dest, Sn, Data) :-  peek(Host, Dest, Sn, Data), status(Host, Dest, "ACTIVE"), conn(Host, Dest, "SEND");
+send(Dest, Host, Sn, Data)@async :- dispatch(Host, Dest, Sn, Data);
+advance(Host, Dest) :- dispatch(Host, Dest, _, _);
+
+// note, this is a library call to the buffer, not a message!
+ack(Host, Dest, Sn, Markings) :- dispatch(Host, Dest, Sn, _), del(Host, Markings), notin conn(Host, Dest, "ACK");
+ack(Host, Dest, Sn, Markings) :- dispatch(Host, Dest, Sn, _), del(Host, Markings), send(Host, Dest, Sn, _);
+
+//snd_ack(Host, Dest, Sn)@async :- send(Dest, Host, Sn, _);
+
+
+// takeover spec
+event_1(Host, Dest) :- fail(Host, Dest), notin status(Host, Dest, "DEAD");
+event_2(Host, Other) :- event_1(Host, Dest), other(Host, Dest, Other), notin conn(Host, Other, "RECV");
+status(Host, Dest, "DEAD")@next :- event_1(Host, Dest);
+conn(Host, Dest, "RECV")@next :- event_2(Host, Dest);
+//reverse.  Other mimicks p(dest)
+
+reverse(Other, Host)@async :- event_2(Host, Other);
+status(H, D, S)@next :- status(H, D, S), notin event_1(H, D);
+conn(H, D, S)@next :- conn(H, D, S), notin del_conn(H, D, S);
+
+conn(Host, Dest, "SEND") :- reverse(Host, Dest);
+
+
+// fail(pair) -> t_fail = true, whatever that means, for various roles
+t_fail(Host) :- fail(Host, _);
+
+del(H, M)@next :- del(H, M);
+
+// here's that close-the-loop shit
+put(H, D, S, 0) :- send(H, _, S, D); 
+
+
+
+other(H, A, B)@next :- other(H, A, B);
+member(Z, N)@next :- member(Z, N);
+
+fail_event(Z, N, H) :- failed(Z, H), member(Z, N);
+fail_log(Z, N, H)@next :- fail_event(Z, N, H);
+fail_log(Z, N, H)@next :- fail_log(Z, N, H);
+fail(N, H)@async :- fail_event(Z, N, H), notin fail_log(Z, N, H);

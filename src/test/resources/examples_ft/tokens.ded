@@ -1,0 +1,42 @@
+include "util/timeout_svc.ded";
+
+node(H, N)@next :- node(H, N);
+token(H, T) :- begin(H, T);
+// fix later
+//wait(H, T)@next :- begin(H, T), notin win(H, T);
+wait(H, T)@next :- begin(H, T);
+wait(H, T)@next :- wait(H, T);
+
+send_token(To, From, Token)@async :- token(From, Token), node(From, To), notin win(From, Token);
+
+ack(F, T)@async :- send_token(H, F, T);
+
+token(H, T) :- send_token(H, _, T);
+token(H, T)@next :- token(H, T), notin ack(H, T);
+
+win(H, T) :- wait(H, T), send_token(H, _, T);
+win(H, T)@next :- win(H, T);
+
+node("a", "b")@1;
+node("b", "c")@1;
+node("c", "d")@1;
+node("d", "a")@1;
+
+skip("a", "c")@1;
+skip("b", "d")@1;
+skip("c", "a")@1;
+skip("d", "b")@1;
+skip(N, S)@next :- skip(N, S);
+
+timer_svc(N, T, 2) :- token(N, T);
+send_token(To, From, Token)@async :- token(From, Token), skip(From, To), timeout(From, Token), notin win(From, Token);
+
+
+begin("a", 1)@1;
+
+
+//bad(H, T) :- begin(H, T)@1, notin win(H, T), notin crash(H, _)@1;
+//bad(H, T) :- win(H, T);
+post(H, T) :- win(H, T);
+pre(H, T) :- begin(H, T);
+good(H, T) :- win(H, T);

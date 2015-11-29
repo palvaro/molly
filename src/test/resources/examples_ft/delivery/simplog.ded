@@ -1,0 +1,10 @@
+// simple broadcast.  make an attempt to send a message to all neighbors
+include "./bcast_edb.ded";
+
+node(Node, Neighbor)@next :- node(Node, Neighbor);
+
+log(Node, Pload)@next :- log(Node, Pload);
+
+log(Node2, Pload)@async :- bcast(Node1, Pload), node(Node1, Node2);
+log(Node, Pload) :- bcast(Node, Pload);
+

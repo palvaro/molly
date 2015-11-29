@@ -1,0 +1,92 @@
+include "real_heartbeat.ded";
+
+
+f_node_mapping("a", 1)@1;
+//f_node_mapping("b", 3)@1;
+f_node_mapping("c", 4)@1;
+
+
+f_key_mapping("foo", 2)@1;
+f_key_mapping("bar", 1)@1;
+n_succ(1, 2)@1;
+n_succ(2, 3)@1;
+n_succ(3, 4)@1;
+n_succ(4,5)@1;
+n_succ(5, 1)@1;
+/*
+n_succ(5,6)@1;
+n_succ(6,7)@1;
+n_succ(7,8)@1;
+n_succ(8,9)@1;
+n_succ(9,10)@1;
+n_succ(10,11)@1;
+n_succ(11,12)@1;
+n_succ(12,1)@1;
+n_succ(0,0)@1;
+*/
+
+node("a")@1;
+node("b")@1;
+node("c")@1;
+node("d")@1;
+
+// JOIN!
+f_node_mapping("d", 5)@2;
+f_node_mapping("b", 3)@2;
+
+
+node(X)@next :- node(X);
+f_node_mapping(H,I)@next :- f_node_mapping(H,I);
+f_key_mapping(H,I)@next :- f_key_mapping(H,I);
+
+node_mapping(N, H, I) :- node(N), f_node_mapping(H, I);
+key_mapping(N, H, I) :- node(N), f_key_mapping(H, I);
+succ(H, X, Y) :- node(H), n_succ(X, Y);
+succ(H,X,Y)@next :- succ(H,X,Y);
+
+
+// maybe the actual successor exists.
+successor(Host, Id, Node) :- node_mapping(Host, Node, Id2), succ(Host, Id, Id2);
+// or else we want the successor of the successor
+successor(Host, Id, Node) :-  succ(Host, Id, Id2), notin node_mapping(Host, _, Id2), successor(Host, Id2, Node);
+my_successor(Host, Node) :- successor(Host, Id, Node), node_mapping(Host, Host, Id);
+next_successor(Host, Next) :- successor(Host, Id, Next), node_mapping(Host, Node, Id), my_successor(Host, Node);
+
+watching(A,B)@next :- watching(A,B);
+watching(A,B)@next :- my_successor(A,B);
+watch(A, B) :- my_successor(A, B), notin watching(A, B);
+
+//good(H, O) :- successor(H, O, _);
+
+comet("a", "noman")@4;
+//comet("b", "b")@3;
+//comet("c", "c")@3;
+//comet("d", "d")@3;
+////comet(X,Y)@next :- comet(X,Y);
+//comet(Y, P)@async :- comet(X, P), my_successor(X, Y);
+comet(Y, X)@async :- comet(X, P), reach(X, Y);
+
+
+win("a",X) :- comet("a", X), node(X);
+good(A,X) :- win(A,X);
+win(A,X)@next :- win(A,X);
+
+//good(A,X) :- comet("a", X), node(A), notin comet(A,X);
+
+//bad(H, O, I) :- failed(H, O, I);
+//good(A, X) :- win(A, X);
+//good(A, X) :- comet(O, X)@1, node(A), d(_, X);
+good(A, X) :- comet(A, X)@2, crash(A, A, _);
+
+
+reach(Host, Other) :- my_successor(Host, Other), notin failed(Host, Other);
+reach(Host, Other) :- next_successor(Host, Other), my_successor(Host, O1), failed(Host, O1);
+
+//reach_base(Host, Other) :- my_successor(Host, Other), notin failed(Host, Other);
+// cheating
+//reach_base(Host, Other) :- next_successor(Host, Other), my_successor(Host, O1), failed(Host, O1);
+//reach(H, O) :- reach_base(H, O);
+//reach(H, O) :- reach_base(H, M), reach(M, O);
+//bad(H, "notaring") :- node(H), notin reach(H, H);
+
+//bad("notaring") :- node(A), notin win(A, _);

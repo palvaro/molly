@@ -1,0 +1,32 @@
+// classic reliable broadcast.  send the contents of the log to all neighbors, once.
+// neighbors relay the log in the same fasion, once only
+
+node(Node, Neighbor)@next :- node(Node, Neighbor);
+log(Node, Pload)@next :- log(Node, Pload);
+
+rbcast(Node2, Node1, Pload)@async :- log(Node1, Pload), node(Node1, Node2), notin ack(Node1, Node2, Pload);
+//log(N, P)@next :- rbcast(N, _, P);
+log(N, P) :- rbcast(N, _, P);
+
+ack(From, Host, Pl)@async :- rbcast(Host, From, Pl);
+ack(S, H, P)@next :- ack(S, H, P);
+
+rbcast(A, A, P) :- bcast(A, P);
+
+
+node("a","a")@1;
+node("b","a")@1;
+node("c","a")@1;
+node("a","b")@1;
+node("b","b")@1;
+node("c","b")@1;
+node("a","c")@1;
+node("b","c")@1;
+node("c","c")@1;
+bcast("a", "nonce1")@1;
+bcast("b", "nonce2")@1;
+bcast("c", "nonce3")@1;
+
+good(N, P) :- log(N, P);
+bad(N, P) :- log(N1, P), node(N1, N), notin log(N, P);
+

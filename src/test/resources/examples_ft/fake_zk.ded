@@ -1,0 +1,19 @@
+include "util/timeout_svc.ded";
+
+timer_svc(Z, Z, 2) :- zookeeper(Z, Z)@1;
+
+// "establish ZK membership" as a replica
+member(Z, M)@async :- begin(M), zookeeper(M, Z);
+clients(Z, C)@async :- client(C), zookeeper(M, Z);
+
+member(Z, M)@next :- member(Z, M);
+leader(Z, L)@next :- leader(Z, L);
+clients(Z, C)@next :- clients(Z, C);
+zookeeper(M, Z)@next :- zookeeper(M, Z);
+
+// periodically tell clients and replicas about membership and leadership
+member(C, M)@async :- member(Z, M), clients(Z, C), zookeeper(Z,Z), timeout(Z, Z);
+member(A, M)@async :- member(Z, A), member(Z, M), zookeeper(Z,Z), timeout(Z, Z);
+leader(M, L)@async :- leader(Z, L), member(Z, M), zookeeper(Z, Z), timeout(Z, Z);
+leader(M, L)@async :- leader(Z, L), clients(Z, M), zookeeper(Z,Z), timeout(Z, Z);
+

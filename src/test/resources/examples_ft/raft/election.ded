@@ -1,0 +1,88 @@
+//include "../util/timeout_svc.ded";
+include "clock.ded";
+
+
+role(N, R)@next :- role(N, R), notin role_change(N, _);
+
+role_x(N, max<I>) :- role_change(N, R), rank(N, R, I);
+role(N, R)@next :- role_x(N, I), rank(N, R, I);
+
+term(N, T)@next :- term(N, T), notin stall(N, T);
+term(N, T)@next :- new_term(N, T);
+new_term(N, T+1) :- term(N, T), stall(N, T);
+lclock_register(N, "Localtime", T) :- new_term(N, T);
+
+
+current_term(N, T) :- term(N, T);
+
+leader(N, T, L) :- current_term(N, T), append_log(N, T, L, _,_, _, _, _);
+
+
+last_append(Node, Term, max<Rcv>) :- append_log(Node, Term, _, _, _,_,_,Rcv);
+
+//stall(Node, Term) :- role(Node, "F"), term_time(Node, Term, Time), last_append(Node, Term, Last), Time - Last > 2;
+//stall(Node, Term) :- term_time(Node, Term, Time), last_append(Node, Term, Last), Time - Last > 2, notin role(Node, "L");
+stall(Node, Term)@next :- lclock(Node, "Localtime", Term, Time), last_append(Node, Term, Last),
+            current_term(Node, Term),
+            notin role(Node, "L"), Time - Last > 1;
+stall(Node, 0)@next :- role(Node, _), notin append_log(Node, _, _, _, _,_,_,_);
+//stall(Node, 0)@next :- role(Node, "C"), notin last_append(Node, _, _);
+
+
+role_change(N, "C") :- stall(N, _);
+role_change(N, "F") :- append_entries(N, T,  L, _, _, _, _), L != N;//, current_term(N, Ct), T > Ct;
+
+request_vote(Node, Lastlogterm + 1, Candidate, Lastlogindx, Lastlogterm)@async :- stall(Candidate, Lastlogterm),
+    //
+    //log_term(Candidate, Lastlogterm),
+    member(Candidate, Node, _), log_indx(Candidate, Lastlogindx);
+
+
+accept_vote(Node, Candidate, Term) :- winner(Node, Term, Id),
+    member(Node, Candidate, Id), log_term(Node, Lterm), Lterm < Term;//), notin accept_vote_log(Node, _, Term);
+winner(Node, Term, min<Id>) :- request_vote(Node, Term, Candidate, _, _), member(Node, Candidate, Id);
+
+
+vote(Candidate, Node, Term, "F")@async :- request_vote(Node, Term, Candidate, _, _), log_term(Node, Lterm), Lterm > Term;
+vote(Candidate, Node, Term, "T")@async :- accept_vote(Node, Candidate, Term);
+
+//accept_vote_log(N,C,T)@next :- accept_vote(N,C,T);
+//accept_vote_log(N,C,T)@next :- accept_vote_log(N,C,T);
+
+
+vote_log(C, N, T, V) :- vote(C, N, T, V);
+vote_log(C, N, T, V)@next :- vote_log(C, N, T, V);
+
+member_cnt(N, count<M>) :- member(N, _, M);
+yes_vote_cnt(Node, Term, count<Id>) :- vote_log(Node, Member, Term, "T"), member(Node, Member, Id);
+
+role_change(N, "L") :- yes_vote_cnt(N, _, Cnt1), member_cnt(N, Cnt2), Cnt1 > Cnt2 / 2;
+
+
+
+
+
+
+//append_entries("z", 0, "z", 0, 0, "FOO", 0)@100;
+
+
+// a stub till I figure out commit indexes
+commit_indx(Node, Idx) :- log_term(Node, Idx);
+
+
+
+member(N, M, I)@next :- member(N, M, I);
+
+
+
+
+
+
+
+
+
+
+
+
+
+

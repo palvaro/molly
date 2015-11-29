@@ -1,0 +1,81 @@
+include "../ramp/encoding.ded";
+include "group_delete.ded";
+
+leader(C, G, L)@next :- leader(C, G, L);
+leader("C", "a|b|c", "a")@1;
+leader("C", "b|c|d", "b")@1;
+leader("C2", "a|b|c", "a")@1;
+leader("C2", "b|c|d", "b")@1;
+
+
+create_group(C,I,G)@next :- create_group(C, I, G); //, notin cg_ack(C, I);
+create_group_request(Leader, Cli, Id, Group)@async :- create_group(Cli, Id, Group), leader(Cli, Group, Leader);
+
+running_group_req(L,C,I,G) :- create_group_request(L,C,I,G);
+running_group_req(L,C,I,G)@next :- running_group_req(L,C,I,G), notin end_delete(L, Id);
+
+// leader logic
+j(Server, Leader, Id, Group)@async :- create_group_request(Leader, _, Id, Group), lencoding(Leader, Group, Server);
+
+
+// follower logic
+j_buf(S,L,I,G) :- j(S,L,I,G);
+j_buf(S,L,I,G)@next :- j_buf(S,L,I,G), notin next(S, I);
+next(S,min<I>) :- j_buf(S,_,I,_), notin j_log(S, _, _, _, _);
+
+// if we are joining a legit thing, advance the state.
+process_event(Server, Leader, Id, Group, Yid)@next :- next(Server, Id), j_buf(Server, Leader, Id, Group),
+    yield_id(Server, Yid), notin follower(Server, _, _), notin j_log(Server, _, _, _, _);
+// or if the key is owned, reject.
+ja(Leader, Server, Id, Yid, "R") :- next(Server, Id), j_buf(Server, Leader, Id, Group),
+        yield_id(Server, Yid), follower(Server, Leader2, _), Leader2 != Leader;
+
+j_log(Server, Leader, Id, Group, Yid) :- process_event(Server, Leader, Id, Group, Yid);
+// the follower needs to retry his acks till he knows the leader knows.
+j_log(S,L,I,G,Y)@next :- j_log(S,L,I,G,Y), notin jaa(S, L, I, Y);
+new_yid(Server) :- process_event(Server, _, _, _,_);
+
+// so much unwritten logic.  at what point do I consider myself a follower?  if only after receiving a
+// jaa, then I can promise myself to multiple leaders.
+// so we consider ourselves a follower even if a create group attempt is ungoing.
+follower(Server, Leader, Id)@next :- j_log(Server, Leader, Id, _, _);
+follower(Server, Leader, Id)@next :- follower(Server, Leader, Id), notin d(Server, Leader, Id);
+
+// keep sending acks.  suppress the last spurious ack (due to deferred update to j_log
+ja(Leader, Server, Id, Yid, "A")@async :- j_log(Server, Leader, Id, Group, Yid), notin jaa(Server, Leader, Id, Yid);
+
+
+
+//
+jaa(Server, Leader, Id, Yid)@async :- ja(Leader, Server, Id, Yid, _);
+
+ja_log(L,S,I,Y,O) :- ja(L, S, I, Y, O);
+ja_log(L,S,I,Y,O)@next :- ja_log(L, S, I, Y, O);
+
+missing_ja(Leader, Server, Id) :- running_group_req(Leader, _, Id, Group),
+    lencoding(Leader, Group, Server), notin ja_log(Leader, Server, Id, _, "A"), Leader != Server;
+can_accept_writes(Leader, Id, Group) :- running_group_req(Leader, _, Id, Group), notin missing_ja(Leader, _, Id);
+//jaa(S,L,I,D)@next :- jaa(S,L,I,D);
+
+//good(C) :- create_group(C, _, _)@1;
+
+//good(Group) :- can_accept_writes(_, _, Group);
+problem(Leader, Server) :- can_accept_writes(Leader, Id, Group),
+    lencoding(Leader, Group, Server), notin follower(Server, Leader, Id), Server != Leader;
+
+good("yay") :- can_accept_writes(Leader, Id, Group), notin problem(Leader, _);
+wata(Leader) :- can_accept_writes(Leader, Id, Group), problem(Leader, _);
+//good("yay") :- create_group(_, _, _)@1;
+
+create_group("C", 1, "a|b|c")@1;
+create_group("C2", 2, "b|c|d")@1;
+
+
+yield_id(C, I)@next :- yield_id(C, I), notin new_yid(C);
+yield_id(C, I + 1)@next :- yield_id(C, I), new_yid(C);
+
+
+yield_id("a", 0)@1;
+yield_id("b", 0)@1;
+yield_id("c", 0)@1;
+yield_id("d", 0)@1;

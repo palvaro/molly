@@ -1,0 +1,43 @@
+// need more than 5 ticks because of topology!
+
+ballot(Host, Round, Id, Id) :- election(Host, Round), slf(Host, Id);
+ballot(Target, Round, MyId, Id)@async :- ballot(Host, Round, _, Id), 
+                                              slf(Host, MyId),
+                                              nodes(Host, Target, _),
+                                              notin has_higher(Host, Round, Id);
+
+ballot_log(T, R, P, I) :- ballot(T, R, P, I);
+
+has_higher(H, R, I) :- ballot_log(H, R, _, I), ballot_log(H, R, _, I2), I2 > I;
+ballot_log(H,R,P, I)@next :- ballot_log(H,R,P,I);
+bcnt(H, R, I, count<P>) :- ballot_log(H, R, P, I);
+ncnt(H, count<I>) :- nodes(H, _, I);
+
+leader(H, R, I) :- ballot(H, R, _, I), bcnt(H, R, I, C1), ncnt(H, C2), C1 > C2/2;
+
+nodes(H, N, I)@next :- nodes(H, N, I);
+slf(N, I)@next :- slf(N, I);
+
+
+slf("a", 1)@1;
+slf("b", 2)@1;
+slf("c", 3)@1;
+
+nodes(X, Y, Z) :- slf(X, _), slf(Y, Z);
+
+election("a", 1)@1;
+election("b", 1)@1;
+//election("c", 1)@1;
+
+
+//bad(Host, I, "noleader") :- slf(Host, I), notin leader(Host, 1, _);
+bad(Host, R, "noleader") :- ballot(Host, R, I, _), notin leader(Host, R, _);
+//bad(Host, I) :- slf(Host, I), notin leader(Host, 1, _), notin crash(Host, _)@1;
+good(Round, I) :- leader(Host, Round, I), notin bad(Host, Round, _);
+//good(Round, I) :- leader(Host, Round, I); //, notin bad(Host, Round, _);
+
+bad(H, L, "disagree") :- leader(H, 1, L), leader(H, 1, L2), L != L2;
+
+pre(R) :- ballot(_, R, _, _);
+disagree(R) :- leader(_, R, L1), leader(_, R, L2), L1 != L2;
+post(R) :- leader(_, R, _), notin disagree(R);
