@@ -1,18 +1,19 @@
 // someone has a log, but not me.
 missing_log(A, Pl) :- log(X, Pl), node(X, A), notin log(A, Pl);//, notin crash(_, A, _);
 
+
 // someone (other than the sender) has a log, 
-haslog(A, Pl) :- log(A, Pl), notin bcast(A, Pl)@1;
+//haslog(A, Pl) :- log(A, Pl), notin bcast(A, Pl)@1;
 // and no one is missing that log.
 //good(Pl, A) :- haslog(A, Pl), notin missing_log(_, Pl);
 //good(Pl, A) :- haslog(A, Pl);//, notin missing_log(_, Pl);
 
 //good(Pl, A) :- log(A, Pl);
-good(A, Pl) :- log(A, Pl);
+//good(A, Pl) :- log(A, Pl);
 
 // vacuous case
 // no one (other than the sender) has the log
-good(B, Pl) :- missing_log(B, Pl), notin haslog(_, Pl);
+//good(B, Pl) :- missing_log(B, Pl), notin haslog(_, Pl);
 
 
 pre(X, Pl) :- log(X, Pl), notin bcast(X, Pl)@1, notin crash(X, X, _);

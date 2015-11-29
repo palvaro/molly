@@ -50,8 +50,7 @@ Programs are submitted in the Dedalus language.  Dedalus is a distributed varian
 
      conclusion(bindings1)[@annotation] :- premise1(bindings2), premise2(bindings2) [...], notin premisen(bindings3), [...];
      
-The conclusions and premises are relations; any variables in the conclusion (bindings1) must be bound in the body.  
-Premises may be positive or negative; if the latter, they are preceded by "notin" and all variables (bindings3) must be bound
+The conclusions and premises are relations; any variables in the conclusion (bindings1) must be bound in the body. Premises may be positive or negative; if the latter, they are preceded by "notin" and all variables (bindings3) must be bound
 in positive premises.
 
 Conclusions can have temporal annotations of the following forms:
@@ -81,3 +80,9 @@ Finally, the last line says that any node that receives a broadcast should put i
 
 #### Specifications
 
+Molly needs a way to check whether injected failures actually violated program correctness properties.  A natural way to express such properties is as an implication of the form "*If* some precondition holds, *then* some postcondition must hold."
+
+
+You may specify correctness properties by providing rules that define two special relations:
+
+ * pre() -- To rule out vacuously correct executions (e.g., those in which no messages are exchanged), we often need to identify when an execution has satisfied some property.
