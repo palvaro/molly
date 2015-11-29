@@ -123,8 +123,11 @@ case class RealGoalNode(
   }
 
   def booleanFormula: BFNode[(String, String, Int)] = {
-    BFAndNode(BFLiteral(ownImportantClock), makeBooleanFormula(pRules.toList))
+    BFAndNode(BFLiteral(ownImportantClock), memoBooleanFormula(pRules.toList))
   }
+
+  lazy val memoBooleanFormula: List[RuleNode] => BFNode[(String, String, Int)] =
+    Memo.mutableHashMapMemo(makeBooleanFormula(_))
 
   def makeBooleanFormula(rules: List[RuleNode]): BFNode[(String, String, Int)] = {
     if (rules.size == 0) {
@@ -132,7 +135,7 @@ case class RealGoalNode(
     } else if (rules.size == 1) {
       rules.head.booleanFormula
     } else {
-      BFOrNode(rules.head.booleanFormula, makeBooleanFormula(rules.tail))
+      BFOrNode(rules.head.booleanFormula, memoBooleanFormula(rules.tail))
     }
   }
 
@@ -190,8 +193,11 @@ case class RuleNode(
   }
 
   def booleanFormula: BFNode[(String, String, Int)] = {
-    makeBooleanFormula(subgoals.toList)
+    memoBooleanFormula(subgoals.toList)
   }
+
+  lazy val memoBooleanFormula: List[GoalNode] => BFNode[(String, String, Int)] =
+    Memo.mutableHashMapMemo(makeBooleanFormula(_))
 
   def makeBooleanFormula(goals: List[GoalNode]): BFNode[(String, String, Int)] = {
     if (goals.size == 1) {
