@@ -53,7 +53,7 @@ object TableOfCounterexamples {
    */
   private def warmup() {
     val (inputPrograms, eot, eff, crashes, nodes) = programs.head
-    val inputFiles = inputPrograms.map(name => new File("../examples_ft/" + name))
+    val inputFiles = inputPrograms.map(name => new File("src/test/resources/examples_ft/" + name))
     val config = Config(eot, eff, crashes, nodes, inputFiles, strategy = "random",
       useSymmetry = false, disableDotRendering = true)
     val metrics: MetricRegistry = new MetricRegistry()
@@ -70,7 +70,7 @@ object TableOfCounterexamples {
     csvWriter.writeRow(header)
     try {
       for ((inputPrograms, eot, eff, crashes, nodes) <- programs) {
-        val inputFiles = inputPrograms.map(name => new File("../examples_ft/" + name))
+        val inputFiles = inputPrograms.map(name => new File("src/test/resources/examples_ft/" + name))
         val randomConfig = Config(eot, eff, crashes, nodes, inputFiles, strategy = "random",
           useSymmetry = false, disableDotRendering = true)
         val backwardConfig = randomConfig.copy(strategy = "sat")
