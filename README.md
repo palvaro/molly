@@ -1,4 +1,4 @@
-# Molly: Grounded Fault Injection
+# Molly: Lineage-driven Fault Injection
 
 ## Installation
 
