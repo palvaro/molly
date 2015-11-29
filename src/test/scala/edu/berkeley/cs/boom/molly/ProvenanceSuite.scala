@@ -25,6 +25,7 @@ class ProvenanceSuite extends FunSuite with Matchers {
     (model, provReader)
   }
 
+  /* temporarily disable to get a baseline
   test("Basic negative provenance") {
     // A contrived example of a program that requires negative provenance:
     val src =
@@ -63,6 +64,7 @@ class ProvenanceSuite extends FunSuite with Matchers {
     val derivations = goal.enumerateDistinctDerivations.map(_.importantClocks)
     derivations should be (Set(Set(("worker1", "master", 1)), Set(("worker2", "master", 1))))
   }
+  */
 
   test("Repeat rule firings with different contributing tuples (missing fields are part of join)") {
     // The field that does not appear in the head is part of a join key:
