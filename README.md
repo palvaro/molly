@@ -107,7 +107,7 @@ There is a record (X, Pl) in post if some node X has a payload Pl in its log, an
     
 ## More information
 
-Molly is described in a [http://people.ucsc.edu/~palvaro/molly.pdf](SIGMOD paper).
+Molly is described in a [SIGMOD paper](http://people.ucsc.edu/~palvaro/molly.pdf).
 
-Dedalus is described in [http://www.eecs.berkeley.edu/Pubs/TechRpts/2009/EECS-2009-173.html](here).
+Dedalus is described [here](http://www.eecs.berkeley.edu/Pubs/TechRpts/2009/EECS-2009-173.html).
 
