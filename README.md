@@ -29,8 +29,8 @@ In this directory, run
 
 ```
 sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker \
-	../examples_ft/delivery/simplog.ded \
-	../examples_ft/delivery/deliv_assert.ded \
+	src/test/resources/examples_ft/delivery/simplog.ded \
+	src/test/resources/examples_ft/delivery/deliv_assert.ded \
 	--EOT 4 \
 	--EFF 2 \
 	--nodes a,b,c \
