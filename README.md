@@ -2,10 +2,13 @@
 
 ## Installation
 
-Molly is written in Scala and compiled using SBT.  Molly depends on the [C4 Overlog runtime](https://github.com/bloom-lang/c4) and [Z3 theorem prover](https://z3.codeplex.com/).
+Molly is written in Scala and compiled using SBT.  Molly depends on the [C4 Overlog runtime](https://github.com/bloom-lang/c4), [Z3 theorem prover](https://z3.codeplex.com/), and the [Optimus LP solver](https://github.com/vagm/Optimus). Molly will install local copies of C4 and Z3 automatically. Note that C4 requires CMake version 2.8 or later. 
 
 The top-level `Makefile` should be handle a one-click build on OS X.
 
+### Linux
+
+Linux users may need to install the [Optimus LP solver](https://github.com/vagm/Optimus) separately. Note Molly requires the lp\_solve installation option. Be sure to publish Optimus locally ("$ sbt publishLocal") before attempting to run Molly.
 
 ## Running
 
