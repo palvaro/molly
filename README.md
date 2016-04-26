@@ -8,7 +8,7 @@ The top-level `Makefile` should be handle a one-click build on OS X.
 
 ### Linux
 
-Linux users may need to install the [Optimus LP solver](https://github.com/vagm/Optimus) separately. Note Molly requires the lp\_solve installation option. Be sure to publish Optimus locally ("$ sbt publishLocal") before attempting to run Molly.
+Linux users may need to install the [Optimus LP solver](https://github.com/vagm/Optimus) separately. Note Molly requires either the lp\_solve or the Gurobi (or both) installation options. Be sure to publish Optimus locally ("$ sbt publishLocal") before attempting to run Molly.
 
 ## Running
 
