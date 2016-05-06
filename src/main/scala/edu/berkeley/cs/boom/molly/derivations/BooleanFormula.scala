@@ -14,6 +14,7 @@ trait BinaryBFNode[T] extends BFNode[T] {
   def left: BFNode[T]
   def right: BFNode[T]
   def construct(l: BFNode[T], r: BFNode[T]): BFNode[T]
+  def flip(l: BFNode[T], r: BFNode[T]): BFNode[T]
 
   override def clauses: Int = {
     1 + left.clauses + right.clauses
@@ -24,7 +25,7 @@ trait BinaryBFNode[T] extends BFNode[T] {
   }
 
   override def flipPolarity: BFNode[T] = {
-    BFOrNode(left.flipPolarity, right.flipPolarity)
+    flip(left.flipPolarity, right.flipPolarity)
   }
 
   override def simplify: BFNode[T] = {
@@ -52,6 +53,11 @@ case class BFAndNode[T](left:BFNode[T], right:BFNode[T]) extends BinaryBFNode[T]
     BFAndNode(l, r)
   }
 
+  def flip(l: BFNode[T], r: BFNode[T]): BFNode[T] = {
+    BFOrNode(l, r)
+  }
+
+
   override def convertToCNF(): BFNode[T] = {
     // stay put, but convert your children to CNF.
     construct(left.convertToCNF, right.convertToCNF)
@@ -78,6 +84,11 @@ case class BFOrNode[T](left:BFNode[T], right:BFNode[T]) extends BinaryBFNode[T] 
 
   override def construct(l: BFNode[T], r: BFNode[T]): BFNode[T] = {
     BFOrNode(l, r)
+  }
+
+  //override
+  def flip(l: BFNode[T], r: BFNode[T]): BFNode[T] = {
+    BFAndNode(l, r)
   }
 
   override def convertToCNF(): BFNode[T] = {
@@ -192,6 +203,3 @@ case class CNFFormula[T](root: BFNode[T]) extends AbstractBooleanFormula[T] {
     }
   }
 }
-
-
-
