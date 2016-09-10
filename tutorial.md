@@ -22,17 +22,16 @@ inductive argument establishes that if a row is ever inserted into member, it st
 
 We can add a few *facts* to our program to populate the member relation:
 
-member("tcp:10.0.0.1:8000", "tcp:10.0.0.2:8000")@1;
-member("tcp:10.0.0.1:8000", "tcp:10.0.0.3:8000")@1;
-member("tcp:10.0.0.1:8000", "tcp:10.0.0.4:8000")@1;
+member("a", "b")@1;
+member("a", "c")@1;
 
 Facts in Dedalus are like bare insert statements in SQL: they reference predicates like rules do, but unlike rules,
-they can only bind arguments to constants.  Consider the first fact.  It says that there is a record <"tcp:10.0.0.1:8000", "tcp:10.0.0.2:8000">
+they can only bind arguments to constants.  Consider the first fact.  It says that there is a record <"a", "b">
 in the table member, at time 1.  Every relation in dedalus is *distributed* across nodes via horizontal partitioning:
 the physical location of a record is always the value taken by its first column.  So informally, the first fact says that
-there is a record <"tcp:10.0.0.1:8000", "tcp:10.0.0.2:8000"> located at the Dedalus instance running on 10.0.0.1 and bound to port 8000,
-at time 1 on 10.0.0.1's clock.  The next two facts indicate that node 10.0.0.1 also knows about nodes 10.0.0.3 and 10.0.0.4.
-the inductive rule for member above ensures that it *always* knows about those nodes.
+there is a record <"a", "b"> located at the Dedalus instance "a" (in practice, this would be an identifier of a process, such as "10.0.0.1:8000" -- indicating a dedalus process running on 10.0.0.1 and bound to port 8000)
+at time 1 on `a`'s (respectively, 10.0.0.1's) clock.  The next two facts indicate that node `a` also knows about nodes `b` and `c`.
+The inductive rule for member above ensures that it *always* knows about those nodes.
 
 
 We use the same persistence pattern for our ``memory'' of received broadcasts:
@@ -53,13 +52,13 @@ other node we know about.  Note that this rule follows two constraints that are 
 
 The only thing necessary to get the protocol running now is to provide it with a stimulus in the form of a bcast event:
 
-     bcast("tcp:10.0.0.1:8000", "Hello, world!")@1;
+     bcast("a", "Hello, world!")@1;
 
 Note that because there is no inductive persistence rule for bcast, it is an *ephemeral* event -- true for a moment in time (here, at time 1).
 Let's consider how evaluation works in the abstract before running this protocol using Molly.  At time 1, on node 10.0.0.1:8000,
 because of the fact we have already inserted, we see that out broadcast rule can take the following bindings:
 
-     log("tcp:10.0.0.2:8000", "Hello, world!")@async :- bcast("tcp:10.0.0.1:8000", "Hello, world!"), member("tcp:10.0.0.1:8000", "tcp:10.0.0.2:8000");
+     log("a", "Hello, world!")@async :- bcast("a", "Hello, world!"), member("a", "b");
      log("tcp:10.0.0.3:8000", "Hello, world!")@async :- bcast("tcp:10.0.0.1:8000", "Hello, world!"), member("tcp:10.0.0.1:8000", "tcp:10.0.0.3:8000");
      log("tcp:10.0.0.4:8000", "Hello, world!")@async :- bcast("tcp:10.0.0.1:8000", "Hello, world!"), member("tcp:10.0.0.1:8000", "tcp:10.0.0.4:8000");
 
