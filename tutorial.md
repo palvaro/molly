@@ -59,7 +59,7 @@ Let's consider how evaluation works in the abstract before running this protocol
 because of the fact we have already inserted, we see that out broadcast rule can take the following bindings:
 
      log("a", "Hello, world!")@async :- bcast("a", "Hello, world!"), member("a", "b");
-     log("tcp:10.0.0.3:8000", "Hello, world!")@async :- bcast("tcp:10.0.0.1:8000", "Hello, world!"), member("tcp:10.0.0.1:8000", "tcp:10.0.0.3:8000");
+     log("b", "Hello, world!")@async :- bcast("a", "Hello, world!"), member("a", "b");
      log("tcp:10.0.0.4:8000", "Hello, world!")@async :- bcast("tcp:10.0.0.1:8000", "Hello, world!"), member("tcp:10.0.0.1:8000", "tcp:10.0.0.4:8000");
 
 Based on this inference, we can see that a message should appear at each member.  At what time will it appear?  We don't know!
