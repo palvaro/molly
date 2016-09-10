@@ -68,8 +68,15 @@ Based on this inference, we can see that a message should appear at each member.
 
 
 Before we can run this Dedalus program using Molly, we need to do a little bit more work.  Molly is a verification tool: in addition
-to giving it programs, we need to tell it how to check if an execution is successful.  Because it is so common to express correctness
-invariants as *implications*, Molly supports a simple convention:
+to giving it programs, we need to tell it how to check if an execution is successful.  In practice, it is common to express correctness invariants as *implications*, having the form "IF it is possible to achieve propery X, THEN the system achieves X." If the correctness property were not stated in this way, then there almost always exists a trivial "bad" execution -- for example, the execution in which all nodes crash before doing anything.  A durability invariant might say "IF a write is acknowledged AND some servers remain up, THEN the write is durable."  An agreement invariant might say "IF anyone reaches a decision, THEN everyone else reaches the same decision."  Executions in which the precondition is false are called vacuously correct.
+
+During the design phase, programmers will very often want to watch their protocol run a few times before rolling up their sleeves and taking on the difficult (indeed, often more difficult than writing the program itself!) task of writing down invariants.  In this case, we have found it useful to start with trivially true invariants, and refine them later.  We will return to wring invariants in the next section, but for now let's write down a precondition/postcondition pair that is *always* true.
+
+
+
+## Invariants.
+
+Molly supports a simple convention:
 
  * Define a table called *pre* that captures preconditions.  Intuitively, [...]
  * Define a table called *post* that captures postconditions.  When Molly executes, for every row in pre(), it checks if there is a matching row in post().  If there is not, it reports an invariant violation.
