@@ -69,7 +69,12 @@ Based on this inference, we can see that a message should appear at each member.
 Before we can run this Dedalus program using Molly, we need to do a little bit more work.  Molly is a verification tool: in addition
 to giving it programs, we need to tell it how to check if an execution is successful.  In practice, it is common to express correctness invariants as *implications*, having the form "IF it is possible to achieve propery X, THEN the system achieves X." If the correctness property were not stated in this way, then there almost always exists a trivial "bad" execution -- for example, the execution in which all nodes crash before doing anything.  A durability invariant might say "IF a write is acknowledged AND some servers remain up, THEN the write is durable."  An agreement invariant might say "IF anyone reaches a decision, THEN everyone else reaches the same decision."  Executions in which the precondition is false are called vacuously correct.
 
-During the design phase, programmers will very often want to watch their protocol run a few times before rolling up their sleeves and taking on the difficult (indeed, often more difficult than writing the program itself!) task of writing down invariants.  In this case, we have found it useful to start with trivially true invariants, and refine them later.  We will return to wring invariants in the next section, but for now let's write down a precondition/postcondition pair that is *always* true.
+During the design phase, programmers will very often want to watch their protocol run a few times before rolling up their sleeves and taking on the difficult (indeed, often more difficult than writing the program itself!) task of writing down invariants.  In this case, we have found it useful to start with trivially true invariants, and refine them later (Molly badly wants your development to be test-driven, but there is always an escape hatch).  We will return to wring invariants in the next section, but for now let's write down a precondition/postcondition pair that is *always* true.
+
+     pre(X) :- log(X, _);
+     post(X) :- pre(X);
+
+It is easy to convince ourselves that the invariant always holds.  In any execution of the program, either there exists an X (and Y) such that  `log(X, Y)`, or not.  If the latter, the precondition is false and the execution is "correct". If the former, then due to the second rule, surely `post(X)` is also true.  The invariant holds if `pre` is false or `post` is true, so the invariant always holds.
 
 
 
