@@ -11,5 +11,5 @@ pre(X) :- log(X, _);
 post(X) :- pre(X);
 
 
-member("a", "b")@1t;
+member("a", "b")@1;
 member("a", "c")@1;
