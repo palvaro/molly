@@ -99,7 +99,15 @@ Molly supports a simple convention:
 
 This is somewhat abstract, but it should become clear in the context of an example.  The classic correctness criterion for a "reliable broadcast" protocol is the following:
 
-*If a correct process delivers a broadcast message, then all correct processes deliver it.
+*If a correct process delivers a broadcast message, then all correct processes deliver it.*
 
+      // someone has a log, but not me.
+     missing_log(A, Pl) :- log(X, Pl), node(X, A), notin log(A, Pl);//, notin crash(_, A, _);
 
+     pre(X, Pl) :- log(X, Pl), notin bcast(X, Pl)@1, notin crash(X, X, _);
+     post(X, Pl) :- log(X, Pl), notin missing_log(_, Pl);
+
+The auxiliary predicate `missing_log(A, Pl)` holds when there exists a node `A`, a node `X` and a message `Pl` such that `log(X, Pl)`, but not `log(A, Pl)` -- intuitively, some node received a broadcast but some other node didn't.
+
+The precondition `pre` host in all executions in which some node (who isn't the broadcaster, and who has not crashed) receives a broadcast.  This captures the precondition of the natural language invariant: "a correct process delivers a message''.
 
