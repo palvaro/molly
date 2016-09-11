@@ -1,0 +1,35 @@
+digraph spacetime {
+    rankdir=TD
+    splines=line
+    outputorder=nodesfirst
+    subgraph cluster_proc_nodes {
+        label="";
+        proc_a [label="Process a",group="a"];
+        proc_b [label="Process b",group="b"];
+        proc_c [label="Process c",group="c"];
+    }
+    node_a_1 [label="1",group="a"];
+    node_a_2 [shape="point",group="a",color="gray75"];
+    node_a_3 [shape="point",group="a",color="gray75"];
+    node_a_4 [shape="point",group="a",color="gray75"];
+    node_a_5 [shape="point",group="a",color="gray75"];
+    node_b_1 [shape="point",group="b",color="gray75"];
+    node_b_2 [label="2",group="b"];
+    node_b_3 [shape="point",group="b",color="gray75"];
+    node_b_4 [shape="point",group="b",color="gray75"];
+    node_b_5 [shape="point",group="b",color="gray75"];
+    node_c_1 [shape="point",group="c",color="gray75"];
+    node_c_2 [label="2",group="c"];
+    node_c_3 [shape="point",group="c",color="gray75"];
+    node_c_4 [shape="point",group="c",color="gray75"];
+    node_c_5 [shape="point",group="c",color="gray75"];
+    
+    node_a_1 -> node_c_2 [label="log",constraint="false",weight="0",style="solid",color="black"];
+    node_a_1 -> node_b_2 [label="log",constraint="false",weight="0",style="solid",color="black"];
+    edge[weight=2, arrowhead=none, color=gray75, fillcolor=gray75];
+    proc_a -> node_a_1 -> node_a_2 -> node_a_3 -> node_a_4 -> node_a_5;
+    edge[weight=2, arrowhead=none, color=gray75, fillcolor=gray75];
+    proc_b -> node_b_1 -> node_b_2 -> node_b_3 -> node_b_4 -> node_b_5;
+    edge[weight=2, arrowhead=none, color=gray75, fillcolor=gray75];
+    proc_c -> node_c_1 -> node_c_2 -> node_c_3 -> node_c_4 -> node_c_5;
+}

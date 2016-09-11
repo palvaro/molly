@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+<head>
+    <title>SyncFT Results</title>
+    <script src="vendor/d3.min.js"></script>
+    <script src="vendor/jquery.min.js"></script>
+    <script src="vendor/jquery.floatThead.min.js"></script>
+    <script src="vendor/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="vendor/bootstrap.min.css">
+    <style type="text/css">
+        /* Always display the scrollbar in webkit so that it's obvious
+        that there are more entries to scroll to; see http://davidwalsh.name/osx-overflow */
+        #runs-table::-webkit-scrollbar {
+            -webkit-appearance: none;
+            width: 7px;
+        }
+        #runs-table::-webkit-scrollbar-thumb {
+            border-radius: 4px;
+            background-color: rgba(0, 0, 0, .5);
+            -webkit-box-shadow: 0 0 1px rgba(255, 255, 255, .5);
+        }
+        table.floatThead-table {
+            border-top: none;
+            border-bottom: none;
+            background-color: #FFF;
+        }
+        #runs-table {
+            height: 240px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Runs</h2>
+    <span class="help-block">Click on a run to see more information</span>
+    <div id="runs-table"></div>
+    <div id="spacetime"><img src="" class="img-responsive"></div>
+    <h2>Provenance</h2>
+    <div id="provenance"><img src="" class="img-responsive"></div>
+    <h2>Table Contents</h2>
+    <div id="details-area">
+        <div id="table-dumps"></div>
+    </div>
+</div>
+
+<script>
+var runs = [];
+var selectedRun = null;
+d3.json("runs.json", function(error, json) {
+    var tableDumps = d3.select("#table-dumps");
+
+    var runsTable = d3.select("#runs-table").append("table").attr("class", "table table-condensed");
+    thead = runsTable.append("thead").append("tr");
+    tbody = runsTable.append("tbody");
+
+    thead.append("th").text("Iteration");
+    thead.append("th").text("Status");
+    thead.append("th").text("Crashes");
+    thead.append("th").text("Message losses");
+
+
+    $('#runs-table').find('table').floatThead({
+        useAbsolutePositioning: true,
+        scrollContainer: function($table){
+            return $table.closest("#runs-table");
+        }
+    });
+
+    var refreshRunsTable = function() {
+        var tr = tbody.selectAll("tr")
+                .data(runs)
+                .enter().append("tr")
+                .on("click", function () {
+                    if (selectedRun !== null)
+                        d3.select(selectedRun).classed("active", false);
+                    d3.select(this).classed("active", true);
+                    selectedRun = this;
+                    displaySelectedRun(d3.select(this).data()[0]);
+                });
+
+        var td = tr.selectAll("td")
+                .data(function (run) {
+                    return [
+                        run.iteration,
+                        formatStatus(run.status),
+                        run.failureSpec.crashes.map(formatCrash).join(", "),
+                        run.failureSpec.omissions.map(formatMessageLoss).join(", ")];
+                })
+                .enter().append("td")
+                .html(function (d) { return d; });
+    };
+
+    var formatCrash = function(crash) {
+        return crash.node + "@" + crash.time;
+    };
+
+    var formatMessageLoss = function(loss) {
+        return loss.from + " ==> " + loss.to + " @ " + loss.time;
+    };
+
+    var formatStatus = function(status) {
+        if (status == "success") {
+            return '<span class="glyphicon glyphicon-ok text-success"> success</span>'
+        } else {
+            return '<span class="glyphicon glyphicon-remove text-danger"> failure</span>'
+        }
+    };
+
+    var displaySelectedRun = function(newRun) {
+        tableDumps.selectAll("div").data([]).exit().remove();
+        d3.select("#spacetime img").attr("src", "run_" + (newRun.iteration) + "_spacetime.svg");
+        d3.select("#provenance img").attr("src", "run_" + (newRun.iteration) + "_provenance.svg");
+        var nonProvTables = d3.entries(newRun.model.tables).filter(function(t) { return t.key != "clock" && t.key.indexOf("_prov") == -1;});
+        var tableDivs = tableDumps.selectAll("div")
+                .data(nonProvTables)
+                .enter().append("div");
+        tableDivs.selectAll("h3")
+                .data(function(t) { return [t]; })
+                .enter().append("h3").text(function (t) { return t.key; });
+        var tables = tableDivs.selectAll("table")
+                .data(function(t) { return [t]; })
+                .enter().append("table").attr("class", "table table-condensed table-bordered");
+        var tBodies = tables.selectAll("tbody")
+                .data(function (t) {
+                    return d3.nest().key(function(d) {
+                        return parseInt(d[d.length - 1]);
+                    })
+                    .sortKeys(function(x, y) { return d3.ascending(parseInt(x), parseInt(y));})
+                    .entries(t.value);
+                })
+                .enter().append("tbody");
+        var rows = tBodies.selectAll("tr").data(function (t) {
+                    return t.values.sort(d3.ascending);
+                })
+                .enter().append("tr");
+        var cols = rows.selectAll("td").data(function(d) { return d; })
+                .enter().append("td")
+                .text(function(d) { return d; });
+    };
+
+
+    json.forEach(function (run) {  runs.push(run); });
+    refreshRunsTable();
+});
+</script>
+</body>
+</html>

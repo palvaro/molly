@@ -1,0 +1,15 @@
+
+member(Node, Other)@next :- member(Node, Other);
+log(Node, Message)@next :- log(Node, Message);
+
+
+log(Other, Message)@async :- bcast(Node, Message), member(Node, Other);
+
+bcast("a", "Hello world!")@1;
+
+pre(X) :- log(X, _);
+post(X) :- pre(X);
+
+
+member("a", "b")@1t;
+member("a", "c")@1;
