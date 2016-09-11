@@ -77,7 +77,7 @@ It is easy to convince ourselves that the invariant always holds.  In any execut
 
 Let's run it!
 
-     sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker -N a,b,c -t 5 -f 0 demo.ded"
+     sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker -N a,b,c -t 5 -f 0 --prov-diagrams demo.ded"
 
 Molly will have created an output directory called `output`.  To view this as a web page, we can
 
@@ -111,3 +111,6 @@ The auxiliary predicate `missing_log(A, Pl)` holds when there exists a node `A`,
 
 The precondition `pre` host in all executions in which some node (who isn't the broadcaster, and who has not crashed) receives a broadcast.  This captures the precondition of the natural language invariant: "a correct process delivers a message''.
 
+Let's run it again.  This time, we will allow message loss for part of the execution, quiescing the faults towards the end to give protocols a chance to recover.  In particular, while keeping the execution bounded at 5 logical timetsteps (`-t 5`), we quiese at time 3 (`-f 3`):
+
+     sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker -N a,b,c -t 5 -f 3 --prov-diagrams demo.ded"
