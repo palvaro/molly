@@ -25,6 +25,8 @@ We can add a few *facts* to our program to populate the member relation:
 member("a", "b")@1;
 member("a", "c")@1;
 
+
+
 Facts in Dedalus are like bare insert statements in SQL: they reference predicates like rules do, but unlike rules,
 they can only bind arguments to constants.  Consider the first fact.  It says that there is a record <"a", "b">
 in the table member, at time 1.  Every relation in dedalus is *distributed* across nodes via horizontal partitioning:
@@ -58,13 +60,10 @@ Note that because there is no inductive persistence rule for bcast, it is an *ep
 Let's consider how evaluation works in the abstract before running this protocol using Molly.  At time 1, on node 10.0.0.1:8000,
 because of the fact we have already inserted, we see that out broadcast rule can take the following bindings:
 
-     log("a", "Hello, world!")@async :- bcast("a", "Hello, world!"), member("a", "b");
      log("b", "Hello, world!")@async :- bcast("a", "Hello, world!"), member("a", "b");
-     log("tcp:10.0.0.4:8000", "Hello, world!")@async :- bcast("tcp:10.0.0.1:8000", "Hello, world!"), member("tcp:10.0.0.1:8000", "tcp:10.0.0.4:8000");
+     log("c", "Hello, world!")@async :- bcast("a", "Hello, world!"), member("a", "c");
 
 Based on this inference, we can see that a message should appear at each member.  At what time will it appear?  We don't know!
-
-
 
 Before we can run this Dedalus program using Molly, we need to do a little bit more work.  Molly is a verification tool: in addition
 to giving it programs, we need to tell it how to check if an execution is successful.  In practice, it is common to express correctness invariants as *implications*, having the form "IF it is possible to achieve propery X, THEN the system achieves X." If the correctness property were not stated in this way, then there almost always exists a trivial "bad" execution -- for example, the execution in which all nodes crash before doing anything.  A durability invariant might say "IF a write is acknowledged AND some servers remain up, THEN the write is durable."  An agreement invariant might say "IF anyone reaches a decision, THEN everyone else reaches the same decision."  Executions in which the precondition is false are called vacuously correct.
@@ -75,6 +74,13 @@ During the design phase, programmers will very often want to watch their protoco
      post(X) :- pre(X);
 
 It is easy to convince ourselves that the invariant always holds.  In any execution of the program, either there exists an X (and Y) such that  `log(X, Y)`, or not.  If the latter, the precondition is false and the execution is "correct". If the former, then due to the second rule, surely `post(X)` is also true.  The invariant holds if `pre` is false or `post` is true, so the invariant always holds.
+
+
+
+Let's run it!
+
+     sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker -N a,b,c -t 5 -f 0 demo.ded"
+
 
 
 
@@ -90,8 +96,4 @@ This is somewhat abstract, but it should become clear in the context of an examp
 *If a correct process delivers a broadcast message, then all correct processes deliver it.
 
 
-
-Let's run it!
-
-     sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker -N tcp:10.0.0.1:8000,tcp:10.0.0.2:8000,tcp:10.0.0.3:8000 -t 5 -f 0 demo.ded"
 
