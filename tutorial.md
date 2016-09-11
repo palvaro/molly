@@ -102,7 +102,7 @@ This is somewhat abstract, but it should become clear in the context of an examp
 *If a correct process delivers a broadcast message, then all correct processes deliver it.*
 
       // someone has a log, but not me.
-     missing_log(A, Pl) :- log(X, Pl), node(X, A), notin log(A, Pl);//, notin crash(_, A, _);
+     missing_log(A, Pl) :- log(X, Pl), member(X, A), notin log(A, Pl);//, notin crash(_, A, _);
 
      pre(X, Pl) :- log(X, Pl), notin bcast(X, Pl)@1, notin crash(X, X, _);
      post(X, Pl) :- log(X, Pl), notin missing_log(_, Pl);
