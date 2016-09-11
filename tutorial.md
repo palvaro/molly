@@ -81,7 +81,12 @@ Let's run it!
 
      sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker -N a,b,c -t 5 -f 0 demo.ded"
 
+Molly will have created an output directory called `output`.  To view this as a web page, we can
 
+     cd output
+     python -m SimpleHTTPServer 8080
+     
+and then point our browser to `http://localhost:8080`.  The files I generated when I ran the command are [here](demo_html).
 
 
 ## Invariants.
