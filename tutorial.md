@@ -86,8 +86,11 @@ Molly will have created an output directory called `output`.  To view this as a 
      cd output
      python -m SimpleHTTPServer 8080
      
-and then point our browser to `http://localhost:8080`.  The files I generated when I ran the command are [here](demo_html).
+and then point our browser to `http://localhost:8080`.  The files I generated when I ran the command are [here](https://rawgit.com/palvaro/molly/master/demo_html/index.html).
 
+The index page presents a list of runs.  Because we had a trivial invariant, Molly did not produce and fault hypotheses after running the initial, failure-free execution, so this table only has one row.  Click on it.
+
+The resulting page shows, first, a Lamport (or space/time) diagram of the protocol's execution.  It then shows the lineage graph for all of the records in `post` -- these are the "good executions" that Molly will try to prevent by injecting faults, once we enrich our invariants.  Finally, it shows a dump of the contents of every relation, for every timestep in the bounded execution.
 
 ## Invariants.
 
