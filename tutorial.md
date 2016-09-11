@@ -1,8 +1,6 @@
 Dedalus is a relational logic language intended for specifying and implementing distributed systems.
 Much like SQL, it allows programmers to describe their system at a high level in terms of data relationships.
-Unlike SQL, it has constructs to characterize details such as mutable state and asynchronous communication.
-
-Instead of trying to explain the Dedalus language all at once, we will present it incrementally in the context of
+Unlike SQL, it has constructs to characterize details such as mutable state and asynchronous communication.  Instead of trying to explain the Dedalus language all at once, we will present it incrementally in the context of
 examples.
 
 For our first Dedalus program, we will implement one of the simplest imaginable distributed programs: a broadcast protocol.
