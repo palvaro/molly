@@ -50,8 +50,8 @@ object MollyBuild extends Build {
         "org.codehaus.jackson" % "jackson-mapper-asl" % "1.9.13",
         "com.github.tototoshi" %% "scala-csv" % "1.0.0",
         "com.lihaoyi" %% "pprint" % "0.3.6",
-        "com.github.nikita-volkov" % "sext" % "0.2.4",
-        "com.github.vagm" %% "optimus" % "1.2.2"
+        "com.github.nikita-volkov" % "sext" % "0.2.4"
+        //"com.github.vagm" %% "optimus" % "1.2.2"
       )
     )
   ).dependsOn(scalaZ3)

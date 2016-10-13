@@ -10,7 +10,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
 import nl.grons.metrics.scala.MetricBuilder
 
-import optimus.optimization._
+//import optimus.optimization._
 
 import pprint.Config.Defaults._
 

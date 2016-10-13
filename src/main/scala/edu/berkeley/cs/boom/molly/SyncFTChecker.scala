@@ -11,7 +11,7 @@ import com.codahale.metrics.{Slf4jReporter, MetricRegistry}
 import java.util.concurrent.TimeUnit
 import scalaz.syntax.id._
 import scalaz.EphemeralStream
-import edu.berkeley.cs.boom.molly.derivations.{SAT4JSolver, Z3Solver, ILPSolver}
+import edu.berkeley.cs.boom.molly.derivations.{SAT4JSolver, Z3Solver}
 
 
 case class Config(
@@ -72,7 +72,7 @@ object SyncFTChecker extends LazyLogging {
     val solver = config.solver match {
       case "z3" => Z3Solver
       case "sat4j" => SAT4JSolver
-      case "ilp" => ILPSolver
+      //case "ilp" => ILPSolver
       case s => throw new IllegalArgumentException(s"unknown solver $s")
     }
     val verifier = new Verifier(failureSpec, program, solver, causalOnly = (config.strategy == "pcausal"),
