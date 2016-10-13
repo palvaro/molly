@@ -13,6 +13,7 @@ Due to system updates on Mac with El Capitan, setting up Molly involves slightly
 6.  Since environment variables are disabled for system security reasons, create symlinks in the working directory, like so:
 
     ln -s ./lib/c4/build/src/libc4/libc4.dylib ./libc4.dylib
+    
     ln -s ./lib/z3/build/z3-dist/lib/libz3.dylib ./libz3.dylib
 
 7. We are now good to go!! 
