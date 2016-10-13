@@ -2,7 +2,6 @@
 member(Node, Other)@next :- member(Node, Other);
 log(Node, Message)@next :- log(Node, Message);
 
-
 log(Other, Message)@async :- bcast(Node, Message), member(Node, Other);
 
 bcast("a", "Hello world!")@1;
@@ -10,6 +9,12 @@ bcast("a", "Hello world!")@1;
 pre(X) :- log(X, _);
 post(X) :- pre(X);
 
-
+member("a", "a")@1;
 member("a", "b")@1;
 member("a", "c")@1;
+member("b", "a")@1;
+member("b", "b")@1;
+member("b", "c")@1;
+member("c", "a")@1;
+member("c", "b")@1;
+member("c", "c")@1;

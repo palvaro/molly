@@ -8,11 +8,11 @@ bcast("a", "Hello world!")@1;
 bcast(Node, Message)@next :- bcast(Node, Message);
 bcast(Node, Message)@next :- log(Node, Message);
 
- // someone (X) has a log, but not A.
- missing_log(A, Pl) :- log(X, Pl), member(_, A), notin log(A, Pl);
+// someone (X) has a log, but not A.
+missing_log(A, Pl) :- log(X, Pl), member(_, A), notin log(A, Pl);
 
- pre(X, Pl) :- log(X, Pl), notin bcast(X, Pl)@1, notin crash(X, X, _);
- post(X, Pl) :- log(X, Pl), notin missing_log(_, Pl);
+pre(X, Pl) :- log(X, Pl), notin bcast(X, Pl)@1, notin crash(X, X, _);
+post(X, Pl) :- log(X, Pl), notin missing_log(_, Pl);
 
 member("a", "a")@1;
 member("a", "b")@1;
