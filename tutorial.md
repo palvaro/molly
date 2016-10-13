@@ -79,7 +79,7 @@ It is easy to convince ourselves that the invariant always holds.  In any execut
 
 Let's run it!
 
-     sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker -N a,b,c -t 5 -f 0 --prov-diagrams demo.ded"
+     sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker -N a,b,c -t 5 -f 0 --prov-diagrams demo_v1.ded"
 
 Molly will have created an output directory called `output`.  To view this as a web page, we can
 
@@ -115,4 +115,6 @@ The precondition `pre` host in all executions in which some node (who isn't the 
 
 Let's run it again.  This time, we will allow message loss for part of the execution, quiescing the faults towards the end to give protocols a chance to recover.  In particular, while keeping the execution bounded at 5 logical timetsteps (`-t 5`), we quiese at time 3 (`-f 3`):
 
-     sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker -N a,b,c -t 5 -f 3 --prov-diagrams demo.ded"
+     sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker -N a,b,c -t 5 -f 3 --prov-diagrams demo_v2.ded"
+
+A counterexample is now discovered.
