@@ -1,6 +1,7 @@
-[submodule "rewrite/lib/c4"]
-    path = lib/c4
-    url = https://github.com/bloom-lang/c4/
-[submodule "rewrite/lib/z3"]
-    path = lib/z3
-    url = https://git.codeplex.com/z3
+[submodule "lib/c4"]
+	path = lib/c4
+    url = https://github.com/bloom-lang/c4
+    ignore = dirty
+[submodule "lib/z3"]
+	path = lib/z3
+	url = https://github.com/Z3Prover/z3

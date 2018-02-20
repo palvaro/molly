@@ -19,3 +19,6 @@ project/plugins/project/
 # IntelliJ-specific
 .idea
 *.iml
+
+# Project-specific
+output/
