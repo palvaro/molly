@@ -29,8 +29,10 @@ what(C, I) :- nodes(C, _, I);
 //agent_cnt(C, count<I>) :- nodes(C, _, I);
 agent_cnt(C, count<I>) :- what(C, I);
 
-accept(A, S, O)@async :- agent_cnt(C, Cnt1), response_cnt(C, S, Cnt2), response_log(C, _, S, O, Os), best(C, S, Os), nodes(C, A, _), Os != 1, Cnt2 > Cnt1 / 2;
-accept(A, S, P)@async :- agent_cnt(C, Cnt1), response_cnt(C, S, Cnt2), response_log(C, _, S, O, Os), best(C, S, Os), my_proposal(C, P), nodes(C, A, _), Os == 1, Cnt2 > Cnt1 / 2;
+accept(A, S, O)@async :- agent_cnt(C, Cnt1), response_cnt(C, S, Cnt2), 
+                         response_log(C, _, S, O, Os), best(C, S, Os), nodes(C, A, _), Os != 1, Cnt2 > Cnt1 / 2;
+accept(A, S, P)@async :- agent_cnt(C, Cnt1), response_cnt(C, S, Cnt2), response_log(C, _, S, O, Os), 
+                         best(C, S, Os), my_proposal(C, P), nodes(C, A, _), Os == 1, Cnt2 > Cnt1 / 2;
 
 
 // acceptor
